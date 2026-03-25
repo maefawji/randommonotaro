@@ -173,8 +173,10 @@ button:disabled {
 }
 
 .image-link {
+  position: relative;
   display: block;
   background: #f3ede3;
+  overflow: hidden;
 }
 
 .gallery-image {
@@ -182,6 +184,42 @@ button:disabled {
   width: 100%;
   aspect-ratio: 4 / 5;
   object-fit: cover;
+  position: relative;
+  z-index: 1;
+  transition: filter 140ms ease, transform 140ms ease;
+}
+
+.image-tooltip {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(32, 25, 21, 0.82);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.5;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 140ms ease, transform 140ms ease;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.image-link:hover .image-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.image-card:hover .image-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.image-link:hover .gallery-image,
+.image-card:hover .gallery-image {
+  filter: brightness(0.72);
 }
 
 :root[data-image-fit="contain"] .gallery-image {

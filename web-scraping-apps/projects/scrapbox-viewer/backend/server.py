@@ -17,7 +17,8 @@ from urllib.request import Request, urlopen
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIR = PROJECT_ROOT / "frontend"
-HOST = os.environ.get("HOST", "127.0.0.1")
+IS_RENDER = os.environ.get("RENDER") == "true"
+HOST = os.environ.get("HOST", "0.0.0.0" if IS_RENDER else "127.0.0.1")
 PORT = int(os.environ.get("PORT", "8011"))
 SCRAPBOX_API_ROOT = "https://scrapbox.io/api/pages"
 DEFAULT_TIMEOUT = 20
@@ -241,6 +242,7 @@ def fetch_page_images_if_tagged(client: ScrapboxClient, page_summary: dict, tag:
       "created": page.get("created"),
       "updated": page.get("updated"),
       "descriptions": descriptions,
+      "preview_text": build_page_preview(lines),
       "images": [item["url"] for item in image_items],
       "image_items": image_items,
       "url": f"https://scrapbox.io/{quote(client.project, safe='')}/{quote(page.get('title', title), safe='')}",
@@ -334,6 +336,20 @@ def extract_line_context(text: str) -> str:
   stripped = IMAGE_URL_PATTERN.sub("", stripped)
   stripped = re.sub(r"\s+", " ", stripped).strip(" []")
   return stripped[:120]
+
+
+def build_page_preview(lines: list[dict]) -> str:
+  snippets: list[str] = []
+  for line in lines:
+    if not isinstance(line, dict):
+      continue
+    text = extract_line_context(str(line.get("text", "")))
+    if not text or text.startswith("#"):
+      continue
+    snippets.append(text)
+    if len(snippets) >= 3:
+      break
+  return " / ".join(snippets)[:240]
 
 
 def fetch_image_bytes(image_url: str, sid: str, project: str) -> tuple[str, bytes]:

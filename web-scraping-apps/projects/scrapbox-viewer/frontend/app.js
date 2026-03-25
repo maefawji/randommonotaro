@@ -100,6 +100,7 @@ function flattenImages(pages) {
       imageUrl: imageItem.url,
       pageTitle: page.title,
       pageUrl: page.url,
+      previewText: page.preview_text || "",
     })),
   );
 }
@@ -128,8 +129,9 @@ function renderGallery(items) {
     .map((item) => {
       return `
         <article class="image-card">
-          <a class="image-link" href="${escapeHtml(item.pageUrl)}" target="_blank" rel="noreferrer" title="Scrapbox を開く">
+          <a class="image-link" href="${escapeHtml(item.pageUrl)}" target="_blank" rel="noreferrer" title="${escapeHtml(item.previewText || item.pageTitle)}">
             <img class="gallery-image" src="${escapeHtml(buildImageProxyUrl(item.imageUrl))}" alt="${escapeHtml(item.pageTitle)}" loading="lazy" data-image-url="${escapeHtml(item.imageUrl)}" />
+            <span class="image-tooltip">${escapeHtml(item.previewText || item.pageTitle)}</span>
           </a>
           <div class="image-caption">
             <a class="image-title" href="${escapeHtml(item.pageUrl)}" target="_blank" rel="noreferrer">${escapeHtml(item.pageTitle)}</a>
