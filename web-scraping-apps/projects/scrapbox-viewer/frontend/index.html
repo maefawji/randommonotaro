@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Scrapbox Daily Input Images</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="panel hero">
+        <p class="eyebrow">Local Browser App</p>
+        <h1>#dailyinput 画像ビューア</h1>
+        <p class="lead">
+          Scrapbox の URL を入力すると、`#dailyinput` が付いたページを走査し、ページ内の画像だけを抽出して表示します。
+        </p>
+
+        <form id="fetch-form" class="fetch-form">
+          <label>
+            <span>Scrapbox URL</span>
+            <input id="url-input" name="url" type="url" value="https://scrapbox.io/9uru9uru/" placeholder="https://scrapbox.io/your-project" required />
+          </label>
+
+          <div class="input-grid">
+            <label>
+              <span>Tag</span>
+              <input id="tag-input" name="tag" type="text" value="#dailyinput" />
+            </label>
+
+            <label>
+              <span>connect.sid (optional)</span>
+              <input id="sid-input" name="sid" type="password" placeholder="private project の場合のみ" />
+            </label>
+          </div>
+
+          <button id="submit-button" type="submit">画像を抽出</button>
+        </form>
+
+        <p id="status" class="status">まだ取得していません。</p>
+      </section>
+
+      <section class="panel controls">
+        <div class="controls-copy">
+          <p class="eyebrow">Display</p>
+          <p class="meta">抽出済み画像から指定枚数ずつランダム表示します。</p>
+        </div>
+        <div class="controls-actions">
+          <label class="count-control">
+            <span>表示枚数</span>
+            <input id="display-count-input" type="number" min="1" max="30" value="3" />
+          </label>
+          <label class="fit-control">
+            <span>画像表示</span>
+            <select id="image-fit-select">
+              <option value="cover">トリミングあり</option>
+              <option value="contain">トリミングなし</option>
+            </select>
+          </label>
+          <button id="shuffle-button" type="button" disabled>再表示</button>
+        </div>
+      </section>
+
+      <section id="gallery" class="gallery" aria-live="polite">
+        <article class="empty-state panel">
+          Scrapbox URL を入力して画像を抽出してください。
+        </article>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

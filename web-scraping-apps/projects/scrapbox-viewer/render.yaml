@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: scrapbox-viewer
+    runtime: python
+    plan: free
+    rootDir: web-scraping-apps/projects/scrapbox-viewer
+    buildCommand: ""
+    startCommand: python backend/server.py
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
