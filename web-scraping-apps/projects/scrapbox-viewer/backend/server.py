@@ -5,6 +5,7 @@ import json
 import os
 import re
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from http import HTTPStatus
@@ -24,8 +25,10 @@ SCRAPBOX_API_ROOT = "https://scrapbox.io/api/pages"
 DEFAULT_TIMEOUT = 20
 MAX_WORKERS = 6
 PAGE_LIST_LIMIT = 1000
+CACHE_TTL_SECONDS = 300
 IMAGE_URL_PATTERN = re.compile(r"https?://[^\s\]]+\.(?:png|jpe?g|gif|webp|svg)(?:\?[^\s\]]*)?", re.IGNORECASE)
 SCRAPBOX_FILE_PATTERN = re.compile(r"https?://scrapbox\.io/files/[^\s\]>)\"']+", re.IGNORECASE)
+RESULT_CACHE: dict[tuple[str, str, str], tuple[float, dict]] = {}
 
 
 @dataclass(frozen=True)
@@ -190,15 +193,22 @@ def normalize_tag(tag: str) -> str:
 
 
 def collect_tagged_images(client: ScrapboxClient, tag: str) -> dict:
+  cache_key = build_cache_key(client, tag)
+  cached_payload = get_cached_payload(cache_key)
+  if cached_payload is not None:
+    return cached_payload
+
   pages = client.fetch_page_list()
-  titles = [str(page.get("title", "")).strip() for page in pages if str(page.get("title", "")).strip()]
+  candidate_pages = filter_candidate_pages_by_tag_hint(pages, tag)
+  pages_to_scan = candidate_pages or pages
+  titles = [str(page.get("title", "")).strip() for page in pages_to_scan if str(page.get("title", "")).strip()]
   matched_pages: list[dict] = []
   skipped_pages: list[str] = []
 
   with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
     future_map = {
         executor.submit(fetch_page_images_if_tagged, client, page, tag): str(page.get("title", "")).strip()
-        for page in pages
+        for page in pages_to_scan
         if str(page.get("title", "")).strip()
     }
     for future in as_completed(future_map):
@@ -213,15 +223,50 @@ def collect_tagged_images(client: ScrapboxClient, tag: str) -> dict:
 
   matched_pages.sort(key=lambda item: str(item["title"]).lower())
   image_count = sum(len(page["images"]) for page in matched_pages)
-  return {
+  payload = {
       "project": client.project,
       "tag": f"#{tag}",
       "page_count": len(matched_pages),
       "image_count": image_count,
       "scanned_count": len(titles),
+      "total_page_count": len(pages),
       "skipped_count": len(skipped_pages),
       "pages": matched_pages,
   }
+  set_cached_payload(cache_key, payload)
+  return payload
+
+
+def build_cache_key(client: ScrapboxClient, tag: str) -> tuple[str, str, str]:
+  return (client.project, tag.lower(), client.sid)
+
+
+def get_cached_payload(cache_key: tuple[str, str, str]) -> dict | None:
+  cached_entry = RESULT_CACHE.get(cache_key)
+  if cached_entry is None:
+    return None
+
+  expires_at, payload = cached_entry
+  if expires_at <= time.time():
+    RESULT_CACHE.pop(cache_key, None)
+    return None
+  return payload
+
+
+def set_cached_payload(cache_key: tuple[str, str, str], payload: dict) -> None:
+  RESULT_CACHE[cache_key] = (time.time() + CACHE_TTL_SECONDS, payload)
+
+
+def filter_candidate_pages_by_tag_hint(pages: list[dict], tag: str) -> list[dict]:
+  candidates: list[dict] = []
+  normalized_tag = tag.lower()
+
+  for page in pages:
+    descriptions = coerce_string_list(page.get("descriptions"))
+    if any(description.strip().lstrip("#").lower() == normalized_tag for description in descriptions):
+      candidates.append(page)
+
+  return candidates
 
 
 def fetch_page_images_if_tagged(client: ScrapboxClient, page_summary: dict, tag: str) -> dict | None:

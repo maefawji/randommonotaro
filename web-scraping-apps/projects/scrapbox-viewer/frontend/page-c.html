@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Scrapbox Daily Input Images ver.3</title>
+    <title>Scrapbox Image Viewer C</title>
     <link rel="stylesheet" href="./style.css" />
   </head>
-  <body data-page-mode="a">
+  <body data-page-mode="c">
     <main class="app-shell">
       <section id="gallery" class="gallery" aria-live="polite">
         <article class="empty-state panel">
@@ -26,10 +26,10 @@
       </section>
 
       <section class="panel hero">
-        <p class="eyebrow">Local Browser App</p>
-        <h1>Scrapbox Image Viewer A</h1>
+        <p class="eyebrow">Spotlight Stage</p>
+        <h1>Scrapbox Image Viewer C</h1>
         <p class="lead">
-          A basic gallery view. Enter a Scrapbox URL to scan tagged pages and show a random image selection.
+          A spotlight layout that emphasizes a strong lead image with the rest shown as a supporting gallery.
         </p>
 
         <form id="fetch-form" class="fetch-form">
@@ -59,7 +59,7 @@
       <section class="panel controls">
         <div class="controls-copy">
           <p class="eyebrow">Display</p>
-          <p id="controls-meta" class="meta">Show a random selection from the extracted images.</p>
+          <p id="controls-meta" class="meta">A layout that gives more space to the lead image.</p>
         </div>
         <div class="controls-actions">
           <label class="search-control">
@@ -77,7 +77,7 @@
           </label>
           <label class="count-control">
             <span>Count</span>
-            <input id="display-count-input" type="number" min="1" max="30" value="3" />
+            <input id="display-count-input" type="number" min="1" max="30" value="5" />
           </label>
           <label class="fit-control">
             <span>Image Fit</span>
@@ -91,9 +91,9 @@
       </section>
 
       <nav class="page-nav" aria-label="View pages">
-        <a class="page-nav-link is-current" href="./index.html">A Page</a>
+        <a class="page-nav-link" href="./index.html">A Page</a>
         <a class="page-nav-link" href="./page-b.html">B Page</a>
-        <a class="page-nav-link" href="./page-c.html">C Page</a>
+        <a class="page-nav-link is-current" href="./page-c.html">C Page</a>
       </nav>
     </main>
 

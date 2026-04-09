@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Scrapbox Daily Input Images ver.3</title>
+    <title>Scrapbox Image Viewer B</title>
     <link rel="stylesheet" href="./style.css" />
   </head>
-  <body data-page-mode="a">
+  <body data-page-mode="b">
     <main class="app-shell">
       <section id="gallery" class="gallery" aria-live="polite">
         <article class="empty-state panel">
@@ -25,11 +25,44 @@
         <div id="summary-stats" class="summary-stats"></div>
       </section>
 
+      <section class="panel controls">
+        <div class="controls-copy">
+          <p class="eyebrow">Display</p>
+          <p id="controls-meta" class="meta">A monochrome layout with images arranged side by side.</p>
+        </div>
+        <div class="controls-actions">
+          <label class="search-control">
+            <span>Search</span>
+            <input id="search-input" type="search" placeholder="Filter by title or text" />
+          </label>
+          <label class="sort-control">
+            <span>Sort</span>
+            <select id="sort-select">
+              <option value="updated-desc">Recently updated</option>
+              <option value="created-desc">Recently created</option>
+              <option value="title-asc">Title</option>
+              <option value="random">Random</option>
+            </select>
+          </label>
+          <label class="count-control">
+            <span>Count</span>
+            <input id="display-count-input" type="number" min="1" max="30" value="6" />
+          </label>
+          <label class="fit-control">
+            <span>Image Fit</span>
+            <select id="image-fit-select">
+              <option value="contain">Contain</option>
+              <option value="cover">Crop</option>
+            </select>
+          </label>
+          <button id="shuffle-button" type="button" disabled>Shuffle</button>
+        </div>
+      </section>
+
       <section class="panel hero">
-        <p class="eyebrow">Local Browser App</p>
-        <h1>Scrapbox Image Viewer A</h1>
+        <h1>Scrapbox Image Viewer B</h1>
         <p class="lead">
-          A basic gallery view. Enter a Scrapbox URL to scan tagged pages and show a random image selection.
+          An editorial board focused on scanability, with a quiet monochrome layout.
         </p>
 
         <form id="fetch-form" class="fetch-form">
@@ -56,43 +89,11 @@
         <p id="status" class="status">No images loaded yet.</p>
       </section>
 
-      <section class="panel controls">
-        <div class="controls-copy">
-          <p class="eyebrow">Display</p>
-          <p id="controls-meta" class="meta">Show a random selection from the extracted images.</p>
-        </div>
-        <div class="controls-actions">
-          <label class="search-control">
-            <span>Search</span>
-            <input id="search-input" type="search" placeholder="Filter by title or text" />
-          </label>
-          <label class="sort-control">
-            <span>Sort</span>
-            <select id="sort-select">
-              <option value="random">Random</option>
-              <option value="updated-desc">Recently updated</option>
-              <option value="created-desc">Recently created</option>
-              <option value="title-asc">Title</option>
-            </select>
-          </label>
-          <label class="count-control">
-            <span>Count</span>
-            <input id="display-count-input" type="number" min="1" max="30" value="3" />
-          </label>
-          <label class="fit-control">
-            <span>Image Fit</span>
-            <select id="image-fit-select">
-              <option value="cover">Crop</option>
-              <option value="contain">Contain</option>
-            </select>
-          </label>
-          <button id="shuffle-button" type="button" disabled>Shuffle</button>
-        </div>
-      </section>
+      <p class="page-b-kicker page-b-footer-note">Editorial Board</p>
 
       <nav class="page-nav" aria-label="View pages">
-        <a class="page-nav-link is-current" href="./index.html">A Page</a>
-        <a class="page-nav-link" href="./page-b.html">B Page</a>
+        <a class="page-nav-link" href="./index.html">A Page</a>
+        <a class="page-nav-link is-current" href="./page-b.html">B Page</a>
         <a class="page-nav-link" href="./page-c.html">C Page</a>
       </nav>
     </main>
