@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Scrapbox Image Viewer E</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body data-page-mode="b" data-page-key="e">
+    <main class="app-shell">
+      <section
+        id="gallery"
+        class="gallery"
+        aria-label="Wall surface"
+        style="width:100vw;margin-left:calc(50% - 50vw);display:flex;justify-content:center;"
+      >
+        <section
+          id="wall-surface"
+          class="wall-surface"
+          style="position:relative;width:min(88vw,1280px);margin:0 auto;aspect-ratio:16 / 9;border:2px solid rgba(70,70,70,0.85);background:transparent;overflow:hidden;"
+        >
+          <div id="bounding-box" class="bounding-box">1</div>
+        </section>
+      </section>
+
+      <section class="panel hero">
+        <h1>Scrapbox Image Viewer E</h1>
+        <p class="lead">Step 1: create one random bounding box inside a wall.</p>
+      </section>
+
+      <section class="panel e-lab">
+        <div class="e-lab-header">
+          <div>
+            <p class="eyebrow">Wall Test</p>
+            <p class="meta">The wall is fixed. One box with a random aspect ratio is placed randomly inside it.</p>
+          </div>
+          <button id="reroll-button" type="button" class="e-reroll-button">Reroll Box</button>
+        </div>
+        <div class="e-lab-modes">
+          <label>
+            <span>Layout Mode</span>
+            <select id="layout-mode-select">
+              <option value="normal">Normal</option>
+              <option value="remove-under">Remove Under On Overlap</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <nav class="page-nav" aria-label="View pages">
+        <a class="page-nav-link" href="./index.html">A Page</a>
+        <a class="page-nav-link" href="./page-b.html">B Page</a>
+        <a class="page-nav-link" href="./page-c.html">C Page</a>
+        <a class="page-nav-link" href="./page-d.html">D Page</a>
+        <a class="page-nav-link is-current" href="./page-e.html">E Page</a>
+        <a class="page-nav-link" href="./page-f.html">F Page</a>
+      </nav>
+    </main>
+
+    <script>
+      // Page E - Step 1 spec:
+      // - Define a wall frame.
+      // - Create one rectangle (rec1) with a random aspect ratio.
+      // - rec1 size fits inside an XL square derived from the wall short side.
+      // - Choose a random center point within an inset frame (offset by rec1 half size).
+      // - Place rec1 so it never overflows the wall.
+      const wallEl = document.getElementById("wall-surface");
+      const rec1El = document.getElementById("bounding-box");
+      const rerollButton = document.getElementById("reroll-button");
+      const layoutModeSelect = document.getElementById("layout-mode-select");
+      let recCount = 1;
+      let layoutMode = "normal";
+
+      function randomBetween(min, max) {
+        return min + Math.random() * (max - min);
+      }
+
+      function buildRec1AspectRatio() {
+        return randomBetween(0.6, 1.8);
+      }
+
+      function buildRec1Size(wallWidth, wallHeight, rec1Aspect) {
+        const shortSide = Math.min(wallWidth, wallHeight);
+        const offset = 88;
+        const xlSquare = Math.max(120, shortSide - offset);
+        const movableSquare = xlSquare * 0.78;
+
+        if (rec1Aspect >= 1) {
+          return {
+            width: movableSquare,
+            height: movableSquare / rec1Aspect,
+          };
+        }
+
+        return {
+          width: movableSquare * rec1Aspect,
+          height: movableSquare,
+        };
+      }
+
+      function buildRecSizeFromSquare(squareSize, recAspect) {
+        if (recAspect >= 1) {
+          return {
+            width: squareSize,
+            height: squareSize / recAspect,
+          };
+        }
+        return {
+          width: squareSize * recAspect,
+          height: squareSize,
+        };
+      }
+
+      function placeRecInFrame(frameRect, recEl, recLabel, sizeOffset = 24) {
+        const recAspect = buildRec1AspectRatio();
+        const squareSize = Math.max(
+          80,
+          Math.min(frameRect.width, frameRect.height) - sizeOffset,
+        );
+        const recSize = buildRecSizeFromSquare(squareSize, recAspect);
+
+        const recWidth = Math.min(recSize.width, frameRect.width);
+        const recHeight = Math.min(recSize.height, frameRect.height);
+        const recHalfWidth = recWidth / 2;
+        const recHalfHeight = recHeight / 2;
+
+        const centerMinX = frameRect.x + recHalfWidth;
+        const centerMaxX = frameRect.x + frameRect.width - recHalfWidth;
+        const centerMinY = frameRect.y + recHalfHeight;
+        const centerMaxY = frameRect.y + frameRect.height - recHalfHeight;
+
+        const centerX =
+          centerMaxX <= centerMinX
+            ? frameRect.x + frameRect.width / 2
+            : randomBetween(centerMinX, centerMaxX);
+        const centerY =
+          centerMaxY <= centerMinY
+            ? frameRect.y + frameRect.height / 2
+            : randomBetween(centerMinY, centerMaxY);
+
+        const recLeft = centerX - recHalfWidth;
+        const recTop = centerY - recHalfHeight;
+
+        recEl.style.width = `${recWidth}px`;
+        recEl.style.height = `${recHeight}px`;
+        recEl.style.left = `${recLeft}px`;
+        recEl.style.top = `${recTop}px`;
+        recEl.style.background = "rgba(216, 231, 255, 0.96)";
+        recEl.style.border = "3px solid #4d6ca3";
+        recEl.style.boxShadow = "0 20px 36px rgba(0, 0, 0, 0.12)";
+        recEl.style.display = "grid";
+        recEl.style.zIndex = recLabel;
+        recEl.textContent = recLabel;
+      }
+
+      function rectanglesOverlap(a, b) {
+        return (
+          a.x < b.x + b.width &&
+          a.x + a.width > b.x &&
+          a.y < b.y + b.height &&
+          a.y + a.height > b.y
+        );
+      }
+
+      function pickSizeOffset() {
+        const options = [
+          { label: "L", offset: 140 },
+          { label: "M", offset: 200 },
+          { label: "S", offset: 260 },
+        ];
+        return options[Math.floor(Math.random() * options.length)];
+      }
+
+      function getInnerWallFrame(wallRect, wallPadding) {
+        return {
+          x: wallPadding,
+          y: wallPadding,
+          width: wallRect.width - wallPadding * 2,
+          height: wallRect.height - wallPadding * 2,
+        };
+      }
+
+      function getRecRect(recEl) {
+        return {
+          x: Number.parseFloat(recEl.style.left || "0"),
+          y: Number.parseFloat(recEl.style.top || "0"),
+          width: recEl.offsetWidth,
+          height: recEl.offsetHeight,
+        };
+      }
+
+      function getLargestVoid(frameRect, recRect) {
+        const topVoid = {
+          x: frameRect.x,
+          y: frameRect.y,
+          width: frameRect.width,
+          height: Math.max(0, recRect.y - frameRect.y),
+        };
+        const bottomVoid = {
+          x: frameRect.x,
+          y: recRect.y + recRect.height,
+          width: frameRect.width,
+          height: Math.max(0, frameRect.y + frameRect.height - (recRect.y + recRect.height)),
+        };
+        const leftVoid = {
+          x: frameRect.x,
+          y: frameRect.y,
+          width: Math.max(0, recRect.x - frameRect.x),
+          height: frameRect.height,
+        };
+        const rightVoid = {
+          x: recRect.x + recRect.width,
+          y: frameRect.y,
+          width: Math.max(0, frameRect.x + frameRect.width - (recRect.x + recRect.width)),
+          height: frameRect.height,
+        };
+
+        const voids = [topVoid, bottomVoid, leftVoid, rightVoid].filter(
+          (rect) => rect.width > 0 && rect.height > 0,
+        );
+        if (!voids.length) {
+          return frameRect;
+        }
+
+        return voids.reduce((largest, rect) => {
+          const area = rect.width * rect.height;
+          const largestArea = largest.width * largest.height;
+          return area > largestArea ? rect : largest;
+        }, voids[0]);
+      }
+
+      function getLargestVoidAcrossRecs(frameRect, recRects) {
+        const voids = recRects.map((recRect) => getLargestVoid(frameRect, recRect));
+        if (!voids.length) {
+          return frameRect;
+        }
+        return voids.reduce((largest, rect) => {
+          const area = rect.width * rect.height;
+          const largestArea = largest.width * largest.height;
+          return area > largestArea ? rect : largest;
+        }, voids[0]);
+      }
+
+      function placeRec1() {
+        const wallRect = wallEl.getBoundingClientRect();
+        const wallPadding = 32;
+        const innerFrame = getInnerWallFrame(wallRect, wallPadding);
+        const rec1Aspect = buildRec1AspectRatio();
+        const rec1Size = buildRec1Size(innerFrame.width, innerFrame.height, rec1Aspect);
+        const rec1Width = Math.min(rec1Size.width, innerFrame.width);
+        const rec1Height = Math.min(rec1Size.height, innerFrame.height);
+
+        // Reset to only rec1 when rerolling.
+        const existingRecs = Array.from(wallEl.querySelectorAll(".bounding-box"));
+        existingRecs.forEach((rec) => {
+          if (rec !== rec1El) {
+            rec.remove();
+          }
+        });
+        recCount = 1;
+
+        placeRecInFrame(innerFrame, rec1El, "1");
+        rec1El.style.width = `${rec1Width}px`;
+        rec1El.style.height = `${rec1Height}px`;
+        rec1El.style.zIndex = "1";
+      }
+
+      function createNextRec(fromRecEl) {
+        const wallRect = wallEl.getBoundingClientRect();
+        const wallPadding = 32;
+        const innerFrame = getInnerWallFrame(wallRect, wallPadding);
+        const fromRecRect = getRecRect(fromRecEl);
+        const largeVoid = getLargestVoid(innerFrame, fromRecRect);
+
+        const nextIndex = recCount + 1;
+        const nextRecEl = document.createElement("div");
+        nextRecEl.className = "bounding-box";
+        nextRecEl.textContent = String(nextIndex);
+        wallEl.appendChild(nextRecEl);
+
+        const picked = pickSizeOffset();
+        placeRecInFrame(largeVoid, nextRecEl, String(nextIndex), picked.offset);
+        recCount = nextIndex;
+
+        if (layoutMode === "remove-under") {
+          const newRect = getRecRect(nextRecEl);
+          const existing = Array.from(wallEl.querySelectorAll(".bounding-box")).filter(
+            (rec) => rec !== nextRecEl,
+          );
+          existing.forEach((rec) => {
+            const recRect = getRecRect(rec);
+            if (rectanglesOverlap(newRect, recRect)) {
+              rec.remove();
+            }
+          });
+        }
+
+        nextRecEl.addEventListener("click", () => {
+          createNextRec(nextRecEl);
+        });
+      }
+
+      rec1El.addEventListener("click", () => {
+        createNextRec(rec1El);
+      });
+      layoutModeSelect.addEventListener("change", () => {
+        layoutMode = layoutModeSelect.value;
+      });
+      rerollButton.addEventListener("click", placeRec1);
+      window.addEventListener("resize", placeRec1);
+      window.addEventListener("load", placeRec1);
+      placeRec1();
+    </script>
+  </body>
+</html>

@@ -199,8 +199,7 @@ def collect_tagged_images(client: ScrapboxClient, tag: str) -> dict:
     return cached_payload
 
   pages = client.fetch_page_list()
-  candidate_pages = filter_candidate_pages_by_tag_hint(pages, tag)
-  pages_to_scan = candidate_pages or pages
+  pages_to_scan = pages
   titles = [str(page.get("title", "")).strip() for page in pages_to_scan if str(page.get("title", "")).strip()]
   matched_pages: list[dict] = []
   skipped_pages: list[str] = []
@@ -255,18 +254,6 @@ def get_cached_payload(cache_key: tuple[str, str, str]) -> dict | None:
 
 def set_cached_payload(cache_key: tuple[str, str, str], payload: dict) -> None:
   RESULT_CACHE[cache_key] = (time.time() + CACHE_TTL_SECONDS, payload)
-
-
-def filter_candidate_pages_by_tag_hint(pages: list[dict], tag: str) -> list[dict]:
-  candidates: list[dict] = []
-  normalized_tag = tag.lower()
-
-  for page in pages:
-    descriptions = coerce_string_list(page.get("descriptions"))
-    if any(description.strip().lstrip("#").lower() == normalized_tag for description in descriptions):
-      candidates.append(page)
-
-  return candidates
 
 
 def fetch_page_images_if_tagged(client: ScrapboxClient, page_summary: dict, tag: str) -> dict | None:
