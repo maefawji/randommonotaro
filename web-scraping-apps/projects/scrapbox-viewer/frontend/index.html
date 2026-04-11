@@ -3,93 +3,49 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Scrapbox Daily Input Images ver.3</title>
+    <title>Scrapbox Image Viewer A</title>
     <link rel="stylesheet" href="./style.css" />
   </head>
-  <body data-page-mode="b" data-page-key="a" data-view-mode="a">
+  <body data-page-mode="b" data-page-key="a">
     <main class="app-shell">
-      <section id="gallery" class="gallery" aria-live="polite">
-        <article class="empty-state panel">
-          Enter a Scrapbox URL to load images.
-        </article>
+      <section
+        id="gallery"
+        class="gallery"
+        aria-label="Wall surface"
+        style="width:100vw;margin-left:calc(50% - 50vw);display:flex;justify-content:center;"
+      >
+        <section
+          id="wall-surface"
+          class="wall-surface"
+          style="position:relative;width:clamp(320px,92vw,1400px);min-height:70vh;border:none;background:transparent;overflow:hidden;"
+        >
+          <div id="bounding-box" class="bounding-box"></div>
+        </section>
       </section>
 
-      <section id="summary-panel" class="panel summary-panel" hidden>
-        <div class="summary-header">
-          <div>
-            <p class="eyebrow">Summary</p>
-            <h2 id="summary-title">Results</h2>
-          </div>
-          <p id="summary-timestamp" class="summary-timestamp"></p>
-        </div>
-        <div id="summary-stats" class="summary-stats"></div>
-      </section>
-
-      <section class="panel hero">
-        <h1>Scrapbox Image Viewer A</h1>
-        <p class="lead">
-          An editorial board focused on scanability, with a quiet monochrome layout.
-        </p>
-
+      <section class="e-lab">
         <form id="fetch-form" class="fetch-form">
           <label>
             <span>Scrapbox URL</span>
-            <input id="url-input" name="url" type="url" value="https://scrapbox.io/9uru9uru/" placeholder="https://scrapbox.io/your-project" required />
+            <input id="url-input" name="url" type="url" value="https://scrapbox.io/9uru9uru/" required />
           </label>
-
           <div class="input-grid">
             <label>
               <span>Tag</span>
               <input id="tag-input" name="tag" type="text" value="#dailyinput" />
             </label>
-
             <label>
               <span>connect.sid (optional)</span>
               <input id="sid-input" name="sid" type="password" placeholder="Only for private projects" />
             </label>
           </div>
-
           <button id="submit-button" type="submit">Load Images</button>
         </form>
-
-        <p id="status" class="status">No images loaded yet.</p>
-      </section>
-
-      <section class="panel controls">
-        <div class="controls-copy">
-          <p class="eyebrow">Display</p>
-          <p id="controls-meta" class="meta">Show a random selection from the extracted images.</p>
-        </div>
-        <div class="controls-actions">
-          <label class="search-control">
-            <span>Search</span>
-            <input id="search-input" type="search" placeholder="Filter by title or text" />
-          </label>
-          <label class="sort-control">
-            <span>Sort</span>
-            <select id="sort-select">
-              <option value="random">Random</option>
-              <option value="updated-desc">Recently updated</option>
-              <option value="created-desc">Recently created</option>
-              <option value="title-asc">Title</option>
-            </select>
-          </label>
-          <label class="count-control">
-            <span>Count</span>
-            <input id="display-count-input" type="number" min="1" max="30" value="6" />
-          </label>
-          <label class="fit-control">
-            <span>Image Fit</span>
-            <select id="image-fit-select">
-              <option value="cover">Crop</option>
-              <option value="contain">Contain</option>
-            </select>
-          </label>
-          <button id="shuffle-button" type="button" disabled>Shuffle</button>
+        <div class="e-lab-header">
+          <p id="status" class="meta">No images loaded yet.</p>
+          <a id="reroll-button" href="#" class="e-reroll-button">Reroll Rec1</a>
         </div>
       </section>
-
-      <p class="page-b-kicker page-b-footer-note">Editorial Board</p>
 
       <nav class="page-nav" aria-label="View pages">
         <a class="page-nav-link is-current" href="./index.html">A Page</a>
@@ -102,6 +58,356 @@
       </nav>
     </main>
 
-    <script src="./app.js"></script>
+    <script>
+      const wallEl = document.getElementById("wall-surface");
+      const rec1El = document.getElementById("bounding-box");
+      const rerollButton = document.getElementById("reroll-button");
+      const form = document.getElementById("fetch-form");
+      const urlInput = document.getElementById("url-input");
+      const tagInput = document.getElementById("tag-input");
+      const sidInput = document.getElementById("sid-input");
+      const statusEl = document.getElementById("status");
+
+      const API_BASE = "";
+      let recCount = 1;
+      let imageItems = [];
+      let isPlacing = false;
+      let removeUnderMode = true;
+      const PREFETCH_COUNT = 10;
+      const aspectQueue = [];
+      const readyAspects = [];
+
+      function randomBetween(min, max) {
+        return min + Math.random() * (max - min);
+      }
+
+      function flattenImages(pages) {
+        return (pages || []).flatMap((page) =>
+          (Array.isArray(page.image_items) && page.image_items.length > 0
+            ? page.image_items
+            : (page.images || []).map((url) => ({ url, context: "" }))).map((imageItem, index) => ({
+            id: `${page.title}-${index}-${imageItem.url}`,
+            imageUrl: imageItem.url,
+          })),
+        );
+      }
+
+      function buildImageProxyUrl(imageUrl) {
+        const query = new URLSearchParams({
+          url: imageUrl,
+          sid: sidInput.value.trim(),
+        });
+        return `${API_BASE}/api/image?${query.toString()}`;
+      }
+
+
+      async function fetchJson(url) {
+        const response = await fetch(`${API_BASE}${url}`);
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to load images.");
+        }
+        return data;
+      }
+
+      function pickRandomImage() {
+        if (!imageItems.length) {
+          return null;
+        }
+        return imageItems[Math.floor(Math.random() * imageItems.length)];
+      }
+
+      function loadImageAspect(url) {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+          img.onerror = () => reject(new Error("Failed to load image"));
+          img.src = url;
+        });
+      }
+
+      function queueAspectPrefetch() {
+        const imageItem = pickRandomImage();
+        if (!imageItem) {
+          return Promise.resolve(null);
+        }
+        const imageUrl = buildImageProxyUrl(imageItem.imageUrl);
+        const promise = new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () =>
+            resolve({
+              width: img.naturalWidth,
+              height: img.naturalHeight,
+              imageUrl,
+              img,
+            });
+          img.onerror = () => resolve(null);
+          img.src = imageUrl;
+        }).catch(() => null);
+
+        promise.then((result) => {
+          if (result) {
+            readyAspects.push(result);
+          }
+        });
+        return promise;
+      }
+
+      function fillAspectQueue() {
+        while (aspectQueue.length < PREFETCH_COUNT) {
+          aspectQueue.push(queueAspectPrefetch());
+        }
+      }
+
+      async function getNextAspect() {
+        fillAspectQueue();
+        if (readyAspects.length > 0) {
+          return readyAspects.shift();
+        }
+        const nextPromise = aspectQueue.shift();
+        const result = await nextPromise;
+        fillAspectQueue();
+        return result;
+      }
+
+      function buildRecSizeFromSquare(squareSize, recAspect) {
+        if (recAspect >= 1) {
+          return {
+            width: squareSize,
+            height: squareSize / recAspect,
+          };
+        }
+        return {
+          width: squareSize * recAspect,
+          height: squareSize,
+        };
+      }
+
+      function pickSizeOffset() {
+        const options = [
+          { label: "L", offset: 140 },
+          { label: "M", offset: 200 },
+          { label: "S", offset: 260 },
+        ];
+        return options[Math.floor(Math.random() * options.length)];
+      }
+
+      function getInnerWallFrame(wallRect, wallPadding) {
+        return {
+          x: wallPadding,
+          y: wallPadding,
+          width: wallRect.width - wallPadding * 2,
+          height: wallRect.height - wallPadding * 2,
+        };
+      }
+
+      function getRecRect(recEl) {
+        return {
+          x: Number.parseFloat(recEl.style.left || "0"),
+          y: Number.parseFloat(recEl.style.top || "0"),
+          width: recEl.offsetWidth,
+          height: recEl.offsetHeight,
+        };
+      }
+
+      function getLargestVoid(frameRect, recRect) {
+        const topVoid = {
+          x: frameRect.x,
+          y: frameRect.y,
+          width: frameRect.width,
+          height: Math.max(0, recRect.y - frameRect.y),
+        };
+        const bottomVoid = {
+          x: frameRect.x,
+          y: recRect.y + recRect.height,
+          width: frameRect.width,
+          height: Math.max(0, frameRect.y + frameRect.height - (recRect.y + recRect.height)),
+        };
+        const leftVoid = {
+          x: frameRect.x,
+          y: frameRect.y,
+          width: Math.max(0, recRect.x - frameRect.x),
+          height: frameRect.height,
+        };
+        const rightVoid = {
+          x: recRect.x + recRect.width,
+          y: frameRect.y,
+          width: Math.max(0, frameRect.x + frameRect.width - (recRect.x + recRect.width)),
+          height: frameRect.height,
+        };
+        const voids = [topVoid, bottomVoid, leftVoid, rightVoid].filter(
+          (rect) => rect.width > 0 && rect.height > 0,
+        );
+        if (!voids.length) {
+          return frameRect;
+        }
+        return voids.reduce((largest, rect) => {
+          const area = rect.width * rect.height;
+          const largestArea = largest.width * largest.height;
+          return area > largestArea ? rect : largest;
+        }, voids[0]);
+      }
+
+      function rectanglesOverlap(a, b) {
+        return (
+          a.x < b.x + b.width &&
+          a.x + a.width > b.x &&
+          a.y < b.y + b.height &&
+          a.y + a.height > b.y
+        );
+      }
+
+      async function placeRecInFrame(frameRect, recEl, recLabel, sizeOffset) {
+        const aspectPayload = await getNextAspect();
+        if (!aspectPayload) {
+          return;
+        }
+        const { width, height, imageUrl, img } = aspectPayload;
+        const recAspect = width / height;
+        const squareSize = Math.max(
+          80,
+          Math.min(frameRect.width, frameRect.height) - sizeOffset,
+        );
+        const recSize = buildRecSizeFromSquare(squareSize, recAspect);
+
+        const recWidth = Math.min(recSize.width, frameRect.width);
+        const recHeight = Math.min(recSize.height, frameRect.height);
+        const recHalfWidth = recWidth / 2;
+        const recHalfHeight = recHeight / 2;
+
+        const centerMinX = frameRect.x + recHalfWidth;
+        const centerMaxX = frameRect.x + frameRect.width - recHalfWidth;
+        const centerMinY = frameRect.y + recHalfHeight;
+        const centerMaxY = frameRect.y + frameRect.height - recHalfHeight;
+
+        const centerX =
+          centerMaxX <= centerMinX
+            ? frameRect.x + frameRect.width / 2
+            : randomBetween(centerMinX, centerMaxX);
+        const centerY =
+          centerMaxY <= centerMinY
+            ? frameRect.y + frameRect.height / 2
+            : randomBetween(centerMinY, centerMaxY);
+
+        const recLeft = centerX - recHalfWidth;
+        const recTop = centerY - recHalfHeight;
+
+        recEl.style.width = `${recWidth}px`;
+        recEl.style.height = `${recHeight}px`;
+        recEl.style.left = `${recLeft}px`;
+        recEl.style.top = `${recTop}px`;
+        recEl.style.backgroundImage = `url("${(img && img.src) || imageUrl}")`;
+        recEl.style.backgroundSize = "cover";
+        recEl.style.backgroundPosition = "center";
+        recEl.style.border = "none";
+        recEl.style.boxShadow = "0 20px 36px rgba(0, 0, 0, 0.12)";
+        recEl.style.display = "grid";
+        recEl.textContent = "";
+      }
+
+      async function placeRec1() {
+        const wallRect = wallEl.getBoundingClientRect();
+        const wallPadding = 32;
+        const innerFrame = getInnerWallFrame(wallRect, wallPadding);
+
+        const existingRecs = Array.from(wallEl.querySelectorAll(".bounding-box"));
+        existingRecs.forEach((rec) => {
+          if (rec !== rec1El) {
+            rec.remove();
+          }
+        });
+        recCount = 1;
+
+        await placeRecInFrame(innerFrame, rec1El, "1", 24);
+      }
+
+      async function createNextRec(fromRecEl) {
+        if (isPlacing) {
+          return;
+        }
+        isPlacing = true;
+        try {
+          const wallRect = wallEl.getBoundingClientRect();
+          const wallPadding = 32;
+          const innerFrame = getInnerWallFrame(wallRect, wallPadding);
+          const fromRecRect = getRecRect(fromRecEl);
+          const largeVoid = getLargestVoid(innerFrame, fromRecRect);
+
+          const nextIndex = recCount + 1;
+          const nextRecEl = document.createElement("div");
+          nextRecEl.className = "bounding-box";
+          wallEl.appendChild(nextRecEl);
+
+          const picked = pickSizeOffset();
+          await placeRecInFrame(largeVoid, nextRecEl, String(nextIndex), picked.offset);
+          recCount = nextIndex;
+
+          if (removeUnderMode) {
+            const newRect = getRecRect(nextRecEl);
+            const existing = Array.from(wallEl.querySelectorAll(".bounding-box")).filter(
+              (rec) => rec !== nextRecEl,
+            );
+            existing.forEach((rec) => {
+              const recRect = getRecRect(rec);
+              if (rectanglesOverlap(newRect, recRect)) {
+                rec.remove();
+              }
+            });
+          }
+
+          nextRecEl.addEventListener("click", () => {
+            createNextRec(nextRecEl);
+          });
+        } finally {
+          isPlacing = false;
+        }
+      }
+
+      rec1El.addEventListener("click", () => {
+        createNextRec(rec1El);
+      });
+
+      rerollButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        placeRec1();
+      });
+
+      async function loadImages() {
+        const url = urlInput.value.trim();
+        const tag = tagInput.value.trim() || "#dailyinput";
+        const sid = sidInput.value.trim();
+
+        if (!url) {
+          statusEl.textContent = "Enter a Scrapbox URL.";
+          return;
+        }
+
+        try {
+          statusEl.textContent = "Loading images...";
+          const query = new URLSearchParams({ url, tag, sid });
+          const data = await fetchJson(`/api/tagged-images?${query.toString()}`);
+          imageItems = flattenImages(data.pages || []);
+          fillAspectQueue();
+          statusEl.textContent = `Loaded ${imageItems.length} images. Click a rec to place images.`;
+          await placeRec1();
+          await createNextRec(rec1El);
+          const rec2 = wallEl.querySelectorAll(".bounding-box")[1];
+          if (rec2) {
+            await createNextRec(rec2);
+          }
+        } catch (error) {
+          statusEl.textContent = error.message || "Failed to load images.";
+        }
+      }
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        loadImages();
+      });
+
+      window.addEventListener("load", () => {
+        loadImages();
+      });
+    </script>
   </body>
 </html>
