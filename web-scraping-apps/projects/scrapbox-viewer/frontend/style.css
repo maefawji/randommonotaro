@@ -62,7 +62,8 @@ body[data-page-key="e"] .app-shell {
   width: min(1500px, 100%);
 }
 
-body[data-page-key="f"] .app-shell {
+body[data-page-key="f"] .app-shell,
+body[data-page-key="a"] .app-shell {
   width: 100%;
   max-width: none;
   padding-left: 0;
@@ -439,7 +440,9 @@ body[data-page-mode="b"] .page-link:hover {
 }
 
 body[data-page-key="f"] input,
-body[data-page-key="f"] select {
+body[data-page-key="f"] select,
+body[data-page-key="a"] input,
+body[data-page-key="a"] select {
   background: transparent;
   border: none;
   border-bottom: 1px solid rgba(0, 0, 0, 0.35);
@@ -448,7 +451,9 @@ body[data-page-key="f"] select {
 }
 
 body[data-page-key="f"] input:focus,
-body[data-page-key="f"] select:focus {
+body[data-page-key="f"] select:focus,
+body[data-page-key="a"] input:focus,
+body[data-page-key="a"] select:focus {
   outline: none;
   border-bottom-color: rgba(0, 0, 0, 0.7);
 }
