@@ -17,33 +17,24 @@
         <section
           id="wall-surface"
           class="wall-surface"
-          style="position:relative;width:min(88vw,1280px);margin:0 auto;aspect-ratio:16 / 9;border:2px solid rgba(70,70,70,0.85);background:transparent;overflow:hidden;"
+          style="position:relative;width:clamp(320px,92vw,1400px);min-height:70vh;border:2px solid rgba(70,70,70,0.85);background:transparent;overflow:hidden;"
         >
-          <div id="bounding-box" class="bounding-box">1</div>
+          <div id="bounding-box" class="bounding-box"></div>
         </section>
       </section>
 
-      <section class="panel hero">
-        <h1>Scrapbox Image Viewer E</h1>
-        <p class="lead">Step 1: create one random bounding box inside a wall.</p>
-      </section>
-
-      <section class="panel e-lab">
+      <section class="e-lab">
         <div class="e-lab-header">
           <div>
             <p class="eyebrow">Wall Test</p>
             <p class="meta">The wall is fixed. One box with a random aspect ratio is placed randomly inside it.</p>
+            <p class="meta e-mode-line">
+              View: [<a id="view-mode-toggle" href="#" class="mode-toggle">color</a>]
+              /
+              Layout: [<a id="layout-mode-toggle" href="#" class="mode-toggle">remove-under</a>]
+            </p>
           </div>
-          <button id="reroll-button" type="button" class="e-reroll-button">Reroll Box</button>
-        </div>
-        <div class="e-lab-modes">
-          <label>
-            <span>Layout Mode</span>
-            <select id="layout-mode-select">
-              <option value="normal">Normal</option>
-              <option value="remove-under">Remove Under On Overlap</option>
-            </select>
-          </label>
+          <a id="reroll-button" href="#" class="e-reroll-button">Reroll Box</a>
         </div>
       </section>
 
@@ -54,6 +45,7 @@
         <a class="page-nav-link" href="./page-d.html">D Page</a>
         <a class="page-nav-link is-current" href="./page-e.html">E Page</a>
         <a class="page-nav-link" href="./page-f.html">F Page</a>
+        <a class="page-nav-link" href="./page-g.html">G Page</a>
       </nav>
     </main>
 
@@ -67,9 +59,11 @@
       const wallEl = document.getElementById("wall-surface");
       const rec1El = document.getElementById("bounding-box");
       const rerollButton = document.getElementById("reroll-button");
-      const layoutModeSelect = document.getElementById("layout-mode-select");
+      const layoutModeToggle = document.getElementById("layout-mode-toggle");
+      const viewModeToggle = document.getElementById("view-mode-toggle");
       let recCount = 1;
-      let layoutMode = "normal";
+      let layoutMode = "remove-under";
+      let viewMode = "color";
 
       function randomBetween(min, max) {
         return min + Math.random() * (max - min);
@@ -145,12 +139,68 @@
         recEl.style.height = `${recHeight}px`;
         recEl.style.left = `${recLeft}px`;
         recEl.style.top = `${recTop}px`;
-        recEl.style.background = "rgba(216, 231, 255, 0.96)";
-        recEl.style.border = "3px solid #4d6ca3";
+        const hue = Number.parseFloat(recEl.dataset.hue || "210");
+        recEl.style.background = `hsla(${hue}, 70%, 85%, 0.96)`;
+        recEl.style.border = "none";
         recEl.style.boxShadow = "0 20px 36px rgba(0, 0, 0, 0.12)";
         recEl.style.display = "grid";
         recEl.style.zIndex = recLabel;
-        recEl.textContent = recLabel;
+        recEl.textContent = "";
+
+        if (viewMode === "wire") {
+          recEl.style.background = "transparent";
+          recEl.style.border = "2px solid rgba(30, 30, 30, 0.7)";
+          recEl.style.boxShadow = "none";
+          recEl.style.color = "#111";
+          recEl.style.fontWeight = "600";
+          recEl.style.fontSize = "14px";
+          recEl.textContent = recLabel;
+        }
+      }
+
+      function parseRgbColor(color) {
+        const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+        if (!match) {
+          return null;
+        }
+        return {
+          r: Number.parseInt(match[1], 10),
+          g: Number.parseInt(match[2], 10),
+          b: Number.parseInt(match[3], 10),
+        };
+      }
+
+      function rgbToHsl(r, g, b) {
+        const rn = r / 255;
+        const gn = g / 255;
+        const bn = b / 255;
+        const max = Math.max(rn, gn, bn);
+        const min = Math.min(rn, gn, bn);
+        const delta = max - min;
+        let h = 0;
+        let s = 0;
+        const l = (max + min) / 2;
+
+        if (delta !== 0) {
+          s = delta / (1 - Math.abs(2 * l - 1));
+          switch (max) {
+            case rn:
+              h = ((gn - bn) / delta) % 6;
+              break;
+            case gn:
+              h = (bn - rn) / delta + 2;
+              break;
+            default:
+              h = (rn - gn) / delta + 4;
+              break;
+          }
+          h = Math.round(h * 60);
+          if (h < 0) {
+            h += 360;
+          }
+        }
+
+        return { h, s, l };
       }
 
       function rectanglesOverlap(a, b) {
@@ -260,6 +310,7 @@
         recCount = 1;
 
         placeRecInFrame(innerFrame, rec1El, "1");
+        rec1El.dataset.hue = "210";
         rec1El.style.width = `${rec1Width}px`;
         rec1El.style.height = `${rec1Height}px`;
         rec1El.style.zIndex = "1";
@@ -275,7 +326,14 @@
         const nextIndex = recCount + 1;
         const nextRecEl = document.createElement("div");
         nextRecEl.className = "bounding-box";
-        nextRecEl.textContent = String(nextIndex);
+        nextRecEl.textContent = "";
+        const fromColor = getComputedStyle(fromRecEl).backgroundColor || "rgb(216, 231, 255)";
+        const rgb = parseRgbColor(fromColor);
+        if (rgb) {
+          const { h } = rgbToHsl(rgb.r, rgb.g, rgb.b);
+          const shift = 18;
+          nextRecEl.dataset.hue = String((h + shift) % 360);
+        }
         wallEl.appendChild(nextRecEl);
 
         const picked = pickSizeOffset();
@@ -303,10 +361,25 @@
       rec1El.addEventListener("click", () => {
         createNextRec(rec1El);
       });
-      layoutModeSelect.addEventListener("change", () => {
-        layoutMode = layoutModeSelect.value;
+      layoutModeToggle.addEventListener("click", (event) => {
+        event.preventDefault();
+        layoutMode = layoutMode === "normal" ? "remove-under" : "normal";
+        layoutModeToggle.textContent = layoutMode;
       });
-      rerollButton.addEventListener("click", placeRec1);
+      viewModeToggle.addEventListener("click", (event) => {
+        event.preventDefault();
+        viewMode = viewMode === "color" ? "wire" : "color";
+        viewModeToggle.textContent = viewMode;
+        const recs = Array.from(wallEl.querySelectorAll(".bounding-box"));
+        recs.forEach((rec, index) => {
+          const label = rec === rec1El ? "1" : String(index + 1);
+          placeRecInFrame(getRecRect(rec), rec, label);
+        });
+      });
+      rerollButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        placeRec1();
+      });
       window.addEventListener("resize", placeRec1);
       window.addEventListener("load", placeRec1);
       placeRec1();

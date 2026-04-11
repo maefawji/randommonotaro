@@ -62,8 +62,18 @@ body[data-page-key="e"] .app-shell {
   width: min(1500px, 100%);
 }
 
+body[data-page-key="f"] .app-shell {
+  width: 100%;
+  max-width: none;
+  padding-left: 0;
+  padding-right: 0;
+}
+
 .e-lab {
   margin-top: 18px;
+  width: min(92vw, 1400px);
+  margin-left: auto;
+  margin-right: auto;
   background: transparent;
   border-color: transparent;
   box-shadow: none;
@@ -79,16 +89,48 @@ body[data-page-key="e"] .app-shell {
 }
 
 .e-lab-header {
-  margin-bottom: 18px;
+  margin-bottom: 10px;
   display: flex;
   align-items: end;
   justify-content: space-between;
   gap: 16px;
 }
 
+.e-mode-line {
+  margin-top: 6px;
+}
+
+.mode-toggle {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-transform: lowercase;
+  text-decoration: underline;
+}
+
+.mode-toggle:hover,
+.mode-toggle:focus-visible {
+  text-decoration: underline;
+}
+
 .e-reroll-button {
-  width: auto;
-  min-width: 140px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  min-width: auto;
+  text-transform: none;
+  text-decoration: underline;
+}
+
+.e-reroll-button:hover,
+.e-reroll-button:focus-visible {
+  opacity: 0.7;
 }
 
 .wall-surface {
@@ -394,6 +436,21 @@ body[data-page-mode="b"] button:hover,
 body[data-page-mode="b"] .page-link:hover {
   background: #181818;
   border-color: #181818;
+}
+
+body[data-page-key="f"] input,
+body[data-page-key="f"] select {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.35);
+  border-radius: 0;
+  padding: 6px 0;
+}
+
+body[data-page-key="f"] input:focus,
+body[data-page-key="f"] select:focus {
+  outline: none;
+  border-bottom-color: rgba(0, 0, 0, 0.7);
 }
 
 body[data-page-mode="b"] .image-link,
