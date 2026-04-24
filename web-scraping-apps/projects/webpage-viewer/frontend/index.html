@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Webpage Image Viewer</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body data-page-mode="b" data-page-key="web">
+    <main class="app-shell">
+      <section
+        id="gallery"
+        class="gallery"
+        aria-label="Wall surface"
+        style="width:100vw;margin-left:calc(50% - 50vw);display:flex;justify-content:center;"
+      >
+        <section
+          id="wall-surface"
+          class="wall-surface"
+          style="position:relative;width:clamp(320px,92vw,1400px);min-height:70vh;border:none;background:#fff;overflow:hidden;"
+        >
+          <div id="bounding-box" class="bounding-box"></div>
+        </section>
+      </section>
+
+      <section class="e-lab">
+        <form id="fetch-form" class="fetch-form">
+          <details class="web-advanced">
+            <summary>Advanced</summary>
+            <section class="web-advanced-section">
+              <h4 class="web-advanced-title">MonotaRO Category Logic</h4>
+              <div class="input-grid web-settings-grid">
+                <label>
+                  <span>Category Data File</span>
+                  <input id="category-data-input" name="category_data" type="text" value="backend/data/monotaro_categories.deep.csv" readonly />
+                </label>
+                <label>
+                  <span>Random Products / Load</span>
+                  <input id="max-pages-input" name="max_pages" type="number" min="1" max="500" value="100" />
+                </label>
+                <label>
+                  <span>Cookie Header (optional)</span>
+                  <input id="cookie-input" name="cookie" type="text" placeholder="session=...; token=..." />
+                </label>
+                <label>
+                  <span>Delay (ms)</span>
+                  <input id="delay-ms-input" name="delay_ms" type="number" min="0" max="5000" value="180" />
+                </label>
+              </div>
+            </section>
+            <p id="crawl-state" class="meta">Crawl state: idle</p>
+            <p id="advanced-result" class="meta">Result: not loaded yet.</p>
+            <p id="cached-page-urls" class="meta" style="white-space: pre-line;">Cached Page URLs: (none)</p>
+            <p id="cached-image-urls" class="meta" style="white-space: pre-line;">Cached Image URLs: (none)</p>
+          </details>
+          <button id="submit-button" type="submit">Load Images</button>
+        </form>
+        <div class="e-lab-header">
+          <p id="status" class="meta">No images loaded yet.</p>
+          <a id="reroll-button" href="#" class="e-reroll-button">Reroll Rec1</a>
+        </div>
+      </section>
+
+      <nav class="page-nav" aria-label="View pages">
+        <a class="page-nav-link is-current" href="./index.html">Web Page</a>
+      </nav>
+    </main>
+
+    <script>
+      const wallEl = document.getElementById("wall-surface");
+      const rec1El = document.getElementById("bounding-box");
+      const rerollButton = document.getElementById("reroll-button");
+      const form = document.getElementById("fetch-form");
+      const categoryDataInput = document.getElementById("category-data-input");
+      const maxPagesInput = document.getElementById("max-pages-input");
+      const cookieInput = document.getElementById("cookie-input");
+      const delayMsInput = document.getElementById("delay-ms-input");
+      const statusEl = document.getElementById("status");
+      const advancedResultEl = document.getElementById("advanced-result");
+      const cachedPageUrlsEl = document.getElementById("cached-page-urls");
+      const cachedImageUrlsEl = document.getElementById("cached-image-urls");
+      const crawlStateEl = document.getElementById("crawl-state");
+
+      const API_BASE = "";
+      let recCount = 1;
+      let cacheImageItems = [];
+      let isPlacing = false;
+      let isCacheRefilling = false;
+      let isLoadingImages = false;
+      let removeUnderMode = true;
+      let lastUrlCount = 0;
+      let lastImageCount = 0;
+      let cacheMonitorId = null;
+      const blockedImageUrls = new Set();
+      const blockedPageUrls = new Set();
+      const PREFETCH_COUNT = 100;
+      const aspectQueue = [];
+      const readyAspects = [];
+
+      function randomBetween(min, max) {
+        return min + Math.random() * (max - min);
+      }
+
+      function flattenImages(pages) {
+        return (pages || []).flatMap((page) =>
+          (Array.isArray(page.image_items) && page.image_items.length > 0
+            ? page.image_items
+            : (page.images || []).map((url) => ({ url, context: "" }))).map((imageItem, index) => ({
+            id: `${page.title}-${index}-${imageItem.url}`,
+            imageUrl: imageItem.url,
+            pageUrl: page.url || "",
+            listPageNo: Number(page.list_page_no || 0),
+            listPageUrl: page.list_page_url || "",
+            rowOfPage: Number(page.row_of_page || 0),
+            categoryId: page.category_id || "",
+            categoryName: page.category_name || "",
+            categoryPath: page.category_path || "",
+            categoryUrl: page.category_url || "",
+            categoryProductCount: Number(page.category_product_count || 0),
+          })),
+        );
+      }
+
+      function getRandomFrom(array) {
+        if (!array.length) {
+          return null;
+        }
+        return array[Math.floor(Math.random() * array.length)];
+      }
+
+      function refreshCachedImageUrlsText() {
+        const urls = cacheImageItems.map((item) => item.imageUrl);
+        cachedImageUrlsEl.textContent = urls.length
+          ? `Cached Image URLs:\n${urls.join("\n")}`
+          : "Cached Image URLs: (none)";
+      }
+
+      function refreshCachedPageUrlsText() {
+        const seen = new Set();
+        const lines = [];
+        for (const item of cacheImageItems) {
+          const uniqueKey = `${item.pageUrl}|${item.categoryPath}`;
+          if (!item.pageUrl || seen.has(uniqueKey)) {
+            continue;
+          }
+          seen.add(uniqueKey);
+          const parts = [];
+          if (item.categoryPath) {
+            parts.push(item.categoryPath);
+          }
+          if (item.listPageNo) {
+            parts.push(`List Page ${item.listPageNo}`);
+          }
+          if (item.rowOfPage) {
+            parts.push(`Row ${item.rowOfPage}`);
+          }
+          const prefix = parts.length ? `[${parts.join(" / ")}] ` : "";
+          lines.push(`${prefix}${item.pageUrl}`);
+        }
+        cachedPageUrlsEl.textContent = lines.length
+          ? `Cached Page URLs:\n${lines.join("\n")}`
+          : "Cached Page URLs: (none)";
+      }
+
+      function updateResultText() {
+        const resultText = `Result: URLs ${lastUrlCount} / Images ${lastImageCount} / Cached ${cacheImageItems.length}`;
+        statusEl.textContent = resultText.replace("Result: ", "");
+        advancedResultEl.textContent = resultText;
+      }
+
+      function refreshCacheUi() {
+        refreshCachedImageUrlsText();
+        refreshCachedPageUrlsText();
+        updateResultText();
+      }
+
+      function ensureCacheStock() {
+        if (isLoadingImages || cacheImageItems.length >= PREFETCH_COUNT || isCacheRefilling) {
+          return;
+        }
+        refillCacheToTarget(PREFETCH_COUNT);
+      }
+
+      function startCacheMonitor() {
+        if (cacheMonitorId !== null) {
+          return;
+        }
+        cacheMonitorId = window.setInterval(() => {
+          ensureCacheStock();
+        }, 1500);
+      }
+
+      function extractUniqueImageItemsFromData(data) {
+        const flat = flattenImages(data.pages || []);
+        const seen = new Set();
+        const unique = [];
+        for (const item of flat) {
+          if (!item || !item.imageUrl || seen.has(item.imageUrl)) {
+            continue;
+          }
+          if (blockedImageUrls.has(item.imageUrl)) {
+            continue;
+          }
+          if (item.pageUrl && blockedPageUrls.has(item.pageUrl)) {
+            continue;
+          }
+          seen.add(item.imageUrl);
+          unique.push(item);
+        }
+        return unique;
+      }
+
+      function mergeIntoCache(newItems, targetCount = PREFETCH_COUNT) {
+        const existing = new Set(cacheImageItems.map((item) => item.imageUrl));
+        for (const item of newItems) {
+          if (!item?.imageUrl || existing.has(item.imageUrl)) {
+            continue;
+          }
+          if (blockedImageUrls.has(item.imageUrl)) {
+            continue;
+          }
+          if (item.pageUrl && blockedPageUrls.has(item.pageUrl)) {
+            continue;
+          }
+          cacheImageItems.push(item);
+          existing.add(item.imageUrl);
+          if (cacheImageItems.length >= targetCount) {
+            break;
+          }
+        }
+      }
+
+      function buildFetchQuery(maxPagesOverride) {
+        const query = new URLSearchParams({
+          count: String(maxPagesOverride ?? maxPagesInput.value),
+          cookie: cookieInput.value.trim(),
+          delay_ms: delayMsInput.value,
+        });
+        return query;
+      }
+
+      async function fetchRandomProducts(batchCount) {
+        const query = buildFetchQuery(batchCount);
+        const data = await fetchJson(`/api/monotaro-random-products?${query.toString()}`);
+        return {
+          data,
+          newItems: extractUniqueImageItemsFromData(data),
+        };
+      }
+
+      async function refillCacheToTarget(targetCount = PREFETCH_COUNT) {
+        if (isCacheRefilling) {
+          return;
+        }
+        isCacheRefilling = true;
+        crawlStateEl.textContent = "Crawl state: picking random categories...";
+        try {
+          let safety = 0;
+          const maxAttempts = Math.max(10, targetCount * 4);
+          while (cacheImageItems.length < targetCount && safety < maxAttempts) {
+            const before = cacheImageItems.length;
+            const batchCount = Math.max(1, Math.min(24, targetCount - cacheImageItems.length));
+            const { data, newItems } = await fetchRandomProducts(batchCount);
+            lastUrlCount = Number(data.url_count || 0);
+            lastImageCount = Number(data.image_count || 0);
+            mergeIntoCache(newItems, targetCount);
+            refreshCacheUi();
+            if (cacheImageItems.length === before) {
+              safety += 1;
+              continue;
+            }
+            safety += 1;
+          }
+
+          refreshCacheUi();
+          aspectQueue.length = 0;
+          fillAspectQueue();
+        } finally {
+          isCacheRefilling = false;
+          crawlStateEl.textContent = "Crawl state: idle";
+        }
+      }
+
+      function buildImageProxyUrl(imageUrl) {
+        const query = new URLSearchParams({
+          url: imageUrl,
+          cookie: cookieInput.value.trim(),
+        });
+        return `${API_BASE}/api/image?${query.toString()}`;
+      }
+
+
+      async function fetchJson(url) {
+        let response;
+        try {
+          response = await fetch(`${API_BASE}${url}`);
+        } catch (error) {
+          throw new Error("Could not connect to API. Start `projects/webpage-viewer/backend/server.py`.");
+        }
+
+        const contentType = response.headers.get("content-type") || "";
+        if (!contentType.includes("application/json")) {
+          const text = await response.text();
+          const shortText = text.slice(0, 120).replace(/\s+/g, " ").trim();
+          throw new Error(
+            `API returned HTML instead of JSON. Open from webpage-viewer server. (${response.status} ${shortText})`,
+          );
+        }
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to load images.");
+        }
+        return data;
+      }
+
+      function pickRandomImage() {
+        return getRandomFrom(cacheImageItems);
+      }
+
+      function loadImageAspect(url) {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+          img.onerror = () => reject(new Error("Failed to load image"));
+          img.src = url;
+        });
+      }
+
+      function queueAspectPrefetch() {
+        const imageItem = pickRandomImage();
+        if (!imageItem) {
+          return Promise.resolve(null);
+        }
+        const imageUrl = buildImageProxyUrl(imageItem.imageUrl);
+        const promise = new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () =>
+            resolve({
+              width: img.naturalWidth,
+              height: img.naturalHeight,
+              imageUrl,
+              sourceUrl: imageItem.imageUrl,
+              sourcePageUrl: imageItem.pageUrl || "",
+              img,
+            });
+          img.onerror = () => resolve(null);
+          img.src = imageUrl;
+        }).catch(() => null);
+
+        promise.then((result) => {
+          if (result) {
+            readyAspects.push(result);
+          }
+        });
+        return promise;
+      }
+
+      function fillAspectQueue() {
+        while (aspectQueue.length < PREFETCH_COUNT) {
+          aspectQueue.push(queueAspectPrefetch());
+        }
+      }
+
+      async function getNextAspect() {
+        fillAspectQueue();
+        if (readyAspects.length > 0) {
+          return readyAspects.shift();
+        }
+        const nextPromise = aspectQueue.shift();
+        const result = await nextPromise;
+        fillAspectQueue();
+        return result;
+      }
+
+      function buildRecSizeFromSquare(squareSize, recAspect) {
+        if (recAspect >= 1) {
+          return {
+            width: squareSize,
+            height: squareSize / recAspect,
+          };
+        }
+        return {
+          width: squareSize * recAspect,
+          height: squareSize,
+        };
+      }
+
+      function pickSizeOffset() {
+        const options = [
+          { label: "L", offset: 140 },
+          { label: "M", offset: 200 },
+          { label: "S", offset: 260 },
+        ];
+        return options[Math.floor(Math.random() * options.length)];
+      }
+
+      function getInnerWallFrame(wallRect, wallPadding) {
+        return {
+          x: wallPadding,
+          y: wallPadding,
+          width: wallRect.width - wallPadding * 2,
+          height: wallRect.height - wallPadding * 2,
+        };
+      }
+
+      function getRecRect(recEl) {
+        return {
+          x: Number.parseFloat(recEl.style.left || "0"),
+          y: Number.parseFloat(recEl.style.top || "0"),
+          width: recEl.offsetWidth,
+          height: recEl.offsetHeight,
+        };
+      }
+
+      function getLargestVoid(frameRect, recRect) {
+        const topVoid = {
+          x: frameRect.x,
+          y: frameRect.y,
+          width: frameRect.width,
+          height: Math.max(0, recRect.y - frameRect.y),
+        };
+        const bottomVoid = {
+          x: frameRect.x,
+          y: recRect.y + recRect.height,
+          width: frameRect.width,
+          height: Math.max(0, frameRect.y + frameRect.height - (recRect.y + recRect.height)),
+        };
+        const leftVoid = {
+          x: frameRect.x,
+          y: frameRect.y,
+          width: Math.max(0, recRect.x - frameRect.x),
+          height: frameRect.height,
+        };
+        const rightVoid = {
+          x: recRect.x + recRect.width,
+          y: frameRect.y,
+          width: Math.max(0, frameRect.x + frameRect.width - (recRect.x + recRect.width)),
+          height: frameRect.height,
+        };
+        const voids = [topVoid, bottomVoid, leftVoid, rightVoid].filter(
+          (rect) => rect.width > 0 && rect.height > 0,
+        );
+        if (!voids.length) {
+          return frameRect;
+        }
+        return voids.reduce((largest, rect) => {
+          const area = rect.width * rect.height;
+          const largestArea = largest.width * largest.height;
+          return area > largestArea ? rect : largest;
+        }, voids[0]);
+      }
+
+      function rectanglesOverlap(a, b) {
+        return (
+          a.x < b.x + b.width &&
+          a.x + a.width > b.x &&
+          a.y < b.y + b.height &&
+          a.y + a.height > b.y
+        );
+      }
+
+      async function placeRecInFrame(frameRect, recEl, recLabel, sizeOffset) {
+        const aspectPayload = await getNextAspect();
+        if (!aspectPayload) {
+          recEl.dataset.ready = "false";
+          return;
+        }
+        const { width, height, imageUrl, sourceUrl, sourcePageUrl, img } = aspectPayload;
+        const recAspect = width / height;
+        const squareSize = Math.max(
+          80,
+          Math.min(frameRect.width, frameRect.height) - sizeOffset,
+        );
+        const recSize = buildRecSizeFromSquare(squareSize, recAspect);
+
+        const recWidth = Math.min(recSize.width, frameRect.width);
+        const recHeight = Math.min(recSize.height, frameRect.height);
+        const recHalfWidth = recWidth / 2;
+        const recHalfHeight = recHeight / 2;
+
+        const centerMinX = frameRect.x + recHalfWidth;
+        const centerMaxX = frameRect.x + frameRect.width - recHalfWidth;
+        const centerMinY = frameRect.y + recHalfHeight;
+        const centerMaxY = frameRect.y + frameRect.height - recHalfHeight;
+
+        const centerX =
+          centerMaxX <= centerMinX
+            ? frameRect.x + frameRect.width / 2
+            : randomBetween(centerMinX, centerMaxX);
+        const centerY =
+          centerMaxY <= centerMinY
+            ? frameRect.y + frameRect.height / 2
+            : randomBetween(centerMinY, centerMaxY);
+
+        const recLeft = centerX - recHalfWidth;
+        const recTop = centerY - recHalfHeight;
+
+        recEl.style.width = `${recWidth}px`;
+        recEl.style.height = `${recHeight}px`;
+        recEl.style.left = `${recLeft}px`;
+        recEl.style.top = `${recTop}px`;
+        recEl.style.backgroundImage = `url("${(img && img.src) || imageUrl}")`;
+        recEl.style.backgroundSize = "cover";
+        recEl.style.backgroundPosition = "center";
+        recEl.style.border = "none";
+        recEl.style.boxShadow = "none";
+        recEl.style.display = "grid";
+        recEl.textContent = "";
+        recEl.dataset.imageUrl = sourceUrl || "";
+        recEl.dataset.pageUrl = sourcePageUrl || "";
+        recEl.dataset.ready = "true";
+      }
+
+      async function placeRec1() {
+        const wallRect = wallEl.getBoundingClientRect();
+        const wallPadding = 32;
+        const innerFrame = getInnerWallFrame(wallRect, wallPadding);
+
+        const existingRecs = Array.from(wallEl.querySelectorAll(".bounding-box"));
+        existingRecs.forEach((rec) => {
+          if (rec !== rec1El) {
+            rec.remove();
+          }
+        });
+        recCount = 1;
+
+        await placeRecInFrame(innerFrame, rec1El, "1", 24);
+      }
+
+      async function createNextRec(fromRecEl) {
+        if (isPlacing) {
+          return;
+        }
+        isPlacing = true;
+        try {
+          const wallRect = wallEl.getBoundingClientRect();
+          const wallPadding = 32;
+          const innerFrame = getInnerWallFrame(wallRect, wallPadding);
+          const fromRecRect = getRecRect(fromRecEl);
+          const largeVoid = getLargestVoid(innerFrame, fromRecRect);
+
+          const nextIndex = recCount + 1;
+          const nextRecEl = document.createElement("div");
+          nextRecEl.className = "bounding-box";
+          wallEl.appendChild(nextRecEl);
+
+          const picked = pickSizeOffset();
+          await placeRecInFrame(largeVoid, nextRecEl, String(nextIndex), picked.offset);
+          recCount = nextIndex;
+
+          if (removeUnderMode) {
+            const newRect = getRecRect(nextRecEl);
+            const existing = Array.from(wallEl.querySelectorAll(".bounding-box")).filter(
+              (rec) => rec !== nextRecEl,
+            );
+            existing.forEach((rec) => {
+              const recRect = getRecRect(rec);
+              if (rectanglesOverlap(newRect, recRect)) {
+                rec.remove();
+              }
+            });
+          }
+
+          nextRecEl.addEventListener("click", () => {
+            handleRecClick(nextRecEl);
+          });
+          nextRecEl.addEventListener("contextmenu", (event) => {
+            openRecPageOnRightClick(event, nextRecEl);
+          });
+        } finally {
+          isPlacing = false;
+        }
+      }
+
+      function consumeClickedImage(recEl) {
+        const clickedImageUrl = (recEl.dataset.imageUrl || "").trim();
+        const clickedPageUrl = (recEl.dataset.pageUrl || "").trim();
+        if (!clickedImageUrl && !clickedPageUrl) {
+          return;
+        }
+        if (clickedImageUrl) {
+          blockedImageUrls.add(clickedImageUrl);
+        }
+        if (clickedPageUrl) {
+          blockedPageUrls.add(clickedPageUrl);
+        }
+
+        cacheImageItems = cacheImageItems.filter((item) =>
+          item.imageUrl !== clickedImageUrl && item.pageUrl !== clickedPageUrl
+        );
+        readyAspects.splice(0, readyAspects.length, ...readyAspects.filter((item) => {
+          if (!item) {
+            return false;
+          }
+          if (clickedImageUrl && item.sourceUrl === clickedImageUrl) {
+            return false;
+          }
+          if (clickedPageUrl && item.sourcePageUrl === clickedPageUrl) {
+            return false;
+          }
+          return true;
+        }));
+        refreshCacheUi();
+        aspectQueue.length = 0;
+        fillAspectQueue();
+      }
+
+      async function handleRecClick(recEl) {
+        consumeClickedImage(recEl);
+        await createNextRec(recEl);
+        ensureCacheStock();
+      }
+
+      function openRecPageOnRightClick(event, recEl) {
+        const pageUrl = (recEl.dataset.pageUrl || "").trim();
+        if (!pageUrl) {
+          return;
+        }
+        event.preventDefault();
+        window.open(pageUrl, "_blank", "noopener,noreferrer");
+      }
+
+      rec1El.addEventListener("click", async () => {
+        await handleRecClick(rec1El);
+      });
+      rec1El.addEventListener("contextmenu", (event) => {
+        openRecPageOnRightClick(event, rec1El);
+      });
+
+      rerollButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        placeRec1();
+      });
+
+      async function loadImages() {
+        const maxPages = maxPagesInput.value;
+
+        try {
+          isLoadingImages = true;
+          aspectQueue.length = 0;
+          readyAspects.length = 0;
+          cacheImageItems = [];
+          rec1El.dataset.ready = "false";
+          lastUrlCount = 0;
+          lastImageCount = 0;
+          blockedImageUrls.clear();
+          blockedPageUrls.clear();
+          statusEl.textContent = "Loading images...";
+          crawlStateEl.textContent = "Crawl state: picking random categories...";
+          advancedResultEl.textContent = "Result: loading...";
+          cachedPageUrlsEl.textContent = "Cached Page URLs: loading...";
+          cachedImageUrlsEl.textContent = "Cached Image URLs: loading...";
+          const query = buildFetchQuery(maxPages);
+          const data = await fetchJson(`/api/monotaro-random-products?${query.toString()}`);
+          lastUrlCount = Number(data.url_count || 0);
+          lastImageCount = Number(data.image_count || 0);
+          const initialItems = extractUniqueImageItemsFromData(data);
+          mergeIntoCache(initialItems, PREFETCH_COUNT);
+          await refillCacheToTarget(PREFETCH_COUNT);
+          fillAspectQueue();
+          refreshCacheUi();
+          await placeRec1();
+          await createNextRec(rec1El);
+          const rec2 = wallEl.querySelectorAll(".bounding-box")[1];
+          if (rec2) {
+            await createNextRec(rec2);
+          }
+        } catch (error) {
+          statusEl.textContent = error.message || "Failed to load images.";
+          crawlStateEl.textContent = "Crawl state: idle";
+          advancedResultEl.textContent = `Result: ${statusEl.textContent}`;
+          cachedPageUrlsEl.textContent = "Cached Page URLs: (none)";
+          cachedImageUrlsEl.textContent = "Cached Image URLs: (none)";
+        } finally {
+          isLoadingImages = false;
+        }
+      }
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        loadImages();
+      });
+
+      window.addEventListener("load", () => {
+        if (categoryDataInput) {
+          categoryDataInput.title = "Copied from monotaro-category-scraper/data/all-categories.deep.categories.csv";
+        }
+        startCacheMonitor();
+        loadImages();
+      });
+    </script>
+  </body>
+</html>
