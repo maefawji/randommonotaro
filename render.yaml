@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: webpage-viewer
+    runtime: python
+    plan: free
+    rootDir: web-scraping-apps/projects/webpage-viewer
+    buildCommand: pip install -r requirements.txt
+    startCommand: python3 backend/server.py
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
