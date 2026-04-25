@@ -7,6 +7,9 @@
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body data-page-mode="b" data-page-key="web">
+    <div id="settings-dot" class="settings-dot" role="button" tabindex="0" aria-label="Open settings" aria-expanded="false" aria-controls="settings-panel"></div>
+    <aside id="settings-panel" class="settings-panel" hidden></aside>
+
     <main class="app-shell">
       <section
         id="gallery"
@@ -140,6 +143,8 @@
       const dedupKeyInput = document.getElementById("dedup-key-input");
       const outputFieldsInput = document.getElementById("output-fields-input");
       const statusEl = document.getElementById("status");
+      const settingsDotEl = document.getElementById("settings-dot");
+      const settingsPanelEl = document.getElementById("settings-panel");
 
       const API_BASE = "";
       let recCount = 1;
@@ -443,6 +448,21 @@
       rerollButton.addEventListener("click", (event) => {
         event.preventDefault();
         placeRec1();
+      });
+
+      settingsDotEl.addEventListener("click", () => {
+        const shouldOpen = settingsPanelEl.hidden;
+        settingsPanelEl.hidden = !shouldOpen;
+        settingsDotEl.setAttribute("aria-expanded", String(shouldOpen));
+        document.body.dataset.settingsOpen = shouldOpen ? "true" : "false";
+      });
+
+      settingsDotEl.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") {
+          return;
+        }
+        event.preventDefault();
+        settingsDotEl.click();
       });
 
       async function loadImages() {

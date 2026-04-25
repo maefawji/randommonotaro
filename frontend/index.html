@@ -7,6 +7,18 @@
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body data-page-mode="b" data-page-key="web" data-display-mode="flow">
+    <div id="settings-dot" class="settings-dot" role="button" tabindex="0" aria-label="Open settings" aria-expanded="false" aria-controls="settings-panel"></div>
+    <aside id="settings-panel" class="settings-panel" hidden>
+      <label class="settings-option">
+        <input id="background-filter-input" type="checkbox" checked />
+        <span>背景のある画像を除外</span>
+      </label>
+      <label class="settings-option">
+        <input id="layout-debug-input" type="checkbox" />
+        <span>補助線を表示</span>
+      </label>
+    </aside>
+
     <main class="app-shell">
       <section
         id="gallery"
@@ -64,6 +76,10 @@
       const localStatsEl = document.getElementById("local-stats");
       const flowLoaderEl = document.getElementById("flow-loader");
       const flowLoaderTextEl = document.getElementById("flow-loader-text");
+      const settingsDotEl = document.getElementById("settings-dot");
+      const settingsPanelEl = document.getElementById("settings-panel");
+      const backgroundFilterInput = document.getElementById("background-filter-input");
+      const layoutDebugInput = document.getElementById("layout-debug-input");
 
       const API_BASE = "";
       const LOCAL_SETTINGS_KEY = "webpage-viewer-local-settings-v2";
@@ -89,6 +105,15 @@
       const FLOW_AHEAD_PX = 2600;
       const MOBILE_BREAKPOINT_PX = 760;
       const FLOW_SECTION_DEFAULT_ITEM_COUNT = 9;
+      const FLOW_REPEAT_MEMORY_LIMIT = 42;
+      const FLOW_REPEAT_MAX_AGE = 72;
+      const FLOW_REPEAT_COOLDOWN = 18;
+      const FLOW_REPEAT_MAX_USES = 2;
+      const FLOW_GROUP_CHANCE = 0.24;
+      const BACKGROUND_FRAME_OFFSET_PX = 6;
+      const BACKGROUND_FRAME_THICKNESS_PX = 10;
+      const BACKGROUND_DARKNESS_THRESHOLD = 28;
+      const BACKGROUND_FILLED_RATIO_THRESHOLD = 0.18;
       const FLOW_LAYOUT_PATTERNS = [
         "grid-hang",
         "off-grid",
@@ -98,6 +123,7 @@
         "same-size-horizontal",
         "same-size-vertical",
         "big-left-right",
+        "big-with-group",
         "center-max-triplet",
         "matrix-9",
         "single-row",
@@ -116,7 +142,10 @@
       const flowMotifs = [];
       const flowMotifDraft = [];
       const flowPlacedItems = [];
-      let flowBaselineItem = null;
+      const flowRepeatUses = new Map();
+      const flowLastRepeatAt = new Map();
+      const flowSectionGuides = new Map();
+      const backgroundAnalysisCache = new Map();
 
       function randomBetween(min, max) {
         return min + Math.random() * (max - min);
@@ -255,6 +284,12 @@
           if (settings.delayMs) {
             delayMsInput.value = settings.delayMs;
           }
+          if (typeof settings.excludeBackgroundImages === "boolean") {
+            backgroundFilterInput.checked = settings.excludeBackgroundImages;
+          }
+          if (typeof settings.showLayoutDebug === "boolean") {
+            layoutDebugInput.checked = settings.showLayoutDebug;
+          }
         } catch (error) {
           window.localStorage.removeItem(LOCAL_SETTINGS_KEY);
         }
@@ -264,8 +299,14 @@
         const settings = {
           maxPages: maxPagesInput.value,
           delayMs: delayMsInput.value,
+          excludeBackgroundImages: backgroundFilterInput.checked,
+          showLayoutDebug: layoutDebugInput.checked,
         };
         window.localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(settings));
+      }
+
+      function updateLayoutDebugMode() {
+        document.body.dataset.layoutDebug = layoutDebugInput.checked ? "true" : "false";
       }
 
       function getCacheTarget() {
@@ -320,7 +361,7 @@
         return unique;
       }
 
-      function mergeIntoCache(newItems, targetCount = getCacheTarget()) {
+      async function mergeIntoCache(newItems, targetCount = getCacheTarget()) {
         const existing = new Set(cacheImageItems.map((item) => item.imageUrl));
         for (const item of newItems) {
           if (!item?.imageUrl || existing.has(item.imageUrl)) {
@@ -332,12 +373,200 @@
           if (item.pageUrl && blockedPageUrls.has(item.pageUrl)) {
             continue;
           }
+          if (await shouldExcludeBackgroundImage(item)) {
+            blockedImageUrls.add(item.imageUrl);
+            continue;
+          }
           cacheImageItems.push(item);
           existing.add(item.imageUrl);
           if (cacheImageItems.length >= targetCount) {
             break;
           }
         }
+      }
+
+      async function shouldExcludeBackgroundImage(item) {
+        if (!backgroundFilterInput.checked || !item?.imageUrl) {
+          return false;
+        }
+        if (backgroundAnalysisCache.has(item.imageUrl)) {
+          return backgroundAnalysisCache.get(item.imageUrl);
+        }
+        try {
+          const exclusion = await detectExcludedImage(item.imageUrl);
+          backgroundAnalysisCache.set(item.imageUrl, exclusion);
+          return exclusion;
+        } catch (error) {
+          backgroundAnalysisCache.set(item.imageUrl, false);
+          return false;
+        }
+      }
+
+      function loadImageForAnalysis(imageUrl) {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.decoding = "async";
+          img.onload = () => resolve(img);
+          img.onerror = reject;
+          img.src = buildImageProxyUrl(imageUrl);
+        });
+      }
+
+      async function detectExcludedImage(imageUrl) {
+        const img = await loadImageForAnalysis(imageUrl);
+        const sourceWidth = img.naturalWidth || img.width;
+        const sourceHeight = img.naturalHeight || img.height;
+        if (!sourceWidth || !sourceHeight) {
+          return false;
+        }
+
+        const maxSide = 128;
+        const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+        canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        if (!context) {
+          return false;
+        }
+        context.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const imageData = context.getImageData(0, 0, canvas.width, canvas.height).data;
+
+        if (isNoImagePlaceholder({ imageData, width: canvas.width, height: canvas.height })) {
+          return true;
+        }
+
+        return detectImageBackgroundFromPixels({ imageData, width: canvas.width, height: canvas.height, scale });
+      }
+
+      function detectImageBackgroundFromPixels({ imageData, width, height, scale }) {
+        const offset = Math.max(1, Math.round(BACKGROUND_FRAME_OFFSET_PX * scale));
+        const thickness = Math.max(1, Math.round(BACKGROUND_FRAME_THICKNESS_PX * scale));
+        const xMin = offset;
+        const yMin = offset;
+        const xMax = width - offset - 1;
+        const yMax = height - offset - 1;
+        if (xMax <= xMin || yMax <= yMin) {
+          return false;
+        }
+
+        let sampled = 0;
+        let filled = 0;
+
+        for (let y = yMin; y <= yMax; y += 1) {
+          for (let x = xMin; x <= xMax; x += 1) {
+            const nearFrame =
+              x - xMin < thickness ||
+              xMax - x < thickness ||
+              y - yMin < thickness ||
+              yMax - y < thickness;
+            if (!nearFrame) {
+              continue;
+            }
+            sampled += 1;
+            const index = (y * width + x) * 4;
+            const alpha = imageData[index + 3];
+            if (alpha < 48) {
+              continue;
+            }
+            const red = imageData[index];
+            const green = imageData[index + 1];
+            const blue = imageData[index + 2];
+            const luminance = red * 0.2126 + green * 0.7152 + blue * 0.0722;
+            const darkness = 255 - luminance;
+            if (darkness >= BACKGROUND_DARKNESS_THRESHOLD) {
+              filled += 1;
+            }
+          }
+        }
+
+        return sampled > 0 && filled / sampled >= BACKGROUND_FILLED_RATIO_THRESHOLD;
+      }
+
+      function isNoImagePlaceholder({ imageData, width, height }) {
+        const aspectRatio = width / Math.max(1, height);
+        if (aspectRatio < 0.86 || aspectRatio > 1.16) {
+          return false;
+        }
+
+        const totalPixels = width * height;
+        let nearWhite = 0;
+        let grayInk = 0;
+        let saturated = 0;
+        let grayMinX = width;
+        let grayMinY = height;
+        let grayMaxX = 0;
+        let grayMaxY = 0;
+        let topTextGray = 0;
+        let lowerTextGray = 0;
+
+        for (let y = 0; y < height; y += 1) {
+          for (let x = 0; x < width; x += 1) {
+            const index = (y * width + x) * 4;
+            const alpha = imageData[index + 3];
+            if (alpha < 48) {
+              nearWhite += 1;
+              continue;
+            }
+            const red = imageData[index];
+            const green = imageData[index + 1];
+            const blue = imageData[index + 2];
+            const maxChannel = Math.max(red, green, blue);
+            const minChannel = Math.min(red, green, blue);
+            const luminance = red * 0.2126 + green * 0.7152 + blue * 0.0722;
+            const chroma = maxChannel - minChannel;
+
+            if (luminance >= 244 && chroma <= 10) {
+              nearWhite += 1;
+              continue;
+            }
+            if (chroma > 28) {
+              saturated += 1;
+            }
+            if (chroma <= 16 && luminance >= 110 && luminance <= 205) {
+              grayInk += 1;
+              grayMinX = Math.min(grayMinX, x);
+              grayMinY = Math.min(grayMinY, y);
+              grayMaxX = Math.max(grayMaxX, x);
+              grayMaxY = Math.max(grayMaxY, y);
+              const xRatio = x / width;
+              const yRatio = y / height;
+              if (xRatio >= 0.16 && xRatio <= 0.84 && yRatio >= 0.28 && yRatio <= 0.50) {
+                topTextGray += 1;
+              }
+              if (xRatio >= 0.20 && xRatio <= 0.80 && yRatio >= 0.48 && yRatio <= 0.68) {
+                lowerTextGray += 1;
+              }
+            }
+          }
+        }
+
+        const whiteRatio = nearWhite / totalPixels;
+        const grayRatio = grayInk / totalPixels;
+        const saturatedRatio = saturated / totalPixels;
+        if (whiteRatio < 0.78 || grayRatio < 0.018 || grayRatio > 0.16 || saturatedRatio > 0.006) {
+          return false;
+        }
+
+        const grayWidthRatio = (grayMaxX - grayMinX + 1) / width;
+        const grayHeightRatio = (grayMaxY - grayMinY + 1) / height;
+        const grayCenterX = (grayMinX + grayMaxX) / 2 / width;
+        const grayCenterY = (grayMinY + grayMaxY) / 2 / height;
+        const topTextRatio = topTextGray / totalPixels;
+        const lowerTextRatio = lowerTextGray / totalPixels;
+
+        return (
+          grayWidthRatio >= 0.42 &&
+          grayWidthRatio <= 0.82 &&
+          grayHeightRatio >= 0.16 &&
+          grayHeightRatio <= 0.42 &&
+          grayCenterX >= 0.42 &&
+          grayCenterX <= 0.58 &&
+          grayCenterY >= 0.40 &&
+          grayCenterY <= 0.58 &&
+          topTextRatio >= 0.012 &&
+          lowerTextRatio >= 0.004
+        );
       }
 
       function buildFetchQuery(maxPagesOverride) {
@@ -374,7 +603,7 @@
             const { data, newItems } = await fetchRandomProducts(batchCount);
             lastUrlCount = Number(data.url_count || 0);
             lastImageCount = Number(data.image_count || 0);
-            mergeIntoCache(newItems, targetCount);
+            await mergeIntoCache(newItems, targetCount);
             refreshCacheUi();
             if (cacheImageItems.length === before) {
               safety += 1;
@@ -407,11 +636,20 @@
       }
 
       function takeNextFlowItem() {
+        const groupUnit = takeNextFlowGroupUnit();
+        if (groupUnit) {
+          return groupUnit;
+        }
+
         const historyPick = pickRepeatedFlowItem();
         if (historyPick) {
           return historyPick;
         }
 
+        return takeNextFreshFlowItem();
+      }
+
+      function takeNextFreshFlowItem() {
         const nextIndex = cacheImageItems.findIndex((item) =>
           item?.imageUrl && !flowSeenImageUrls.has(item.imageUrl)
         );
@@ -424,22 +662,77 @@
         return item;
       }
 
+      function takeNextFlowGroupUnit() {
+        const placementIndex = infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
+        const seed = hashString(`flow-group:${placementIndex}:${cacheImageItems.length}`);
+        const sectionInfo = getFlowSectionInfo(placementIndex);
+        const layoutPattern = getFlowLayoutPattern(sectionInfo.index);
+        const forceBigWithGroup = layoutPattern === "big-with-group" && sectionInfo.itemIndex === 1;
+        if (layoutPattern === "big-with-group" && sectionInfo.itemIndex === 0) {
+          return null;
+        }
+        if (!forceBigWithGroup && placementIndex < 8) {
+          return null;
+        }
+        const shouldGroup = forceBigWithGroup || ((seed % 100) / 100) < FLOW_GROUP_CHANCE || (sectionInfo.itemIndex === 2 && sectionInfo.index % 3 === 1);
+        if (!shouldGroup) {
+          return null;
+        }
+
+        const groupCount = 2 + (Math.floor(seed / 100) % 2);
+        const freshIndices = [];
+        for (let index = 0; index < cacheImageItems.length && freshIndices.length < groupCount; index += 1) {
+          const item = cacheImageItems[index];
+          if (item?.imageUrl && !flowSeenImageUrls.has(item.imageUrl)) {
+            freshIndices.push(index);
+          }
+        }
+        if (freshIndices.length < groupCount) {
+          return null;
+        }
+
+        const groupItems = [];
+        for (let index = freshIndices.length - 1; index >= 0; index -= 1) {
+          const [item] = cacheImageItems.splice(freshIndices[index], 1);
+          groupItems.unshift(item);
+          flowSeenImageUrls.add(item.imageUrl);
+        }
+        groupItems.forEach((item) => rememberFlowItem(item));
+
+        const groupLayouts = groupItems.length === 2
+          ? ["row", "column", "stair-down", "stair-up"]
+          : ["row", "column", "stair-down", "stair-up"];
+        const groupLayout = groupLayouts[Math.floor(seed / 1000) % groupLayouts.length];
+        const groupUrlKey = groupItems.map((item) => item.imageUrl).join("|");
+        return {
+          ...groupItems[0],
+          id: `group:${placementIndex}:${groupUrlKey}`,
+          imageUrl: groupUrlKey,
+          pageUrl: groupItems[0]?.pageUrl || groupItems[0]?.imageUrl || "",
+          __isGroup: true,
+          __groupItems: groupItems,
+          __groupLayout: groupLayout,
+          __groupCount: groupItems.length,
+        };
+      }
+
       function rememberFlowItem(item) {
         if (!item?.imageUrl) {
           return;
         }
-        flowHistoryItems.push(item);
-        if (flowHistoryItems.length > 36) {
+        const rememberedItem = {
+          ...item,
+          __flowSeenAt: infiniteFeedEl.querySelectorAll(".infinite-feed-item").length,
+        };
+        flowHistoryItems.push(rememberedItem);
+        if (flowHistoryItems.length > FLOW_REPEAT_MEMORY_LIMIT) {
           flowHistoryItems.shift();
         }
-        if (!flowBaselineItem && flowHistoryItems.length >= 4) {
-          flowBaselineItem = item;
-        }
-        flowMotifItems.push(item);
+        flowMotifItems.push(rememberedItem);
         if (flowMotifItems.length > 5) {
           flowMotifItems.shift();
         }
-        flowMotifDraft.push(item);
+        flowMotifDraft.push(rememberedItem);
         if (flowMotifDraft.length >= 4) {
           flowMotifs.push({
             createdAt: infiniteFeedEl.querySelectorAll(".infinite-feed-item").length,
@@ -455,100 +748,185 @@
 
       function pickRepeatedFlowItem() {
         const nextIndex = infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
+        pruneFlowRepeatMemory(nextIndex);
         const sectionInfo = getFlowSectionInfo(nextIndex);
-        if (flowHistoryItems.length >= 12 && isFlowChorusSection(sectionInfo.index)) {
-          const recentPool = flowHistoryItems.slice(-30);
+        if (flowHistoryItems.length >= 12 && nextIndex > 0 && sectionInfo.index % 8 === 6) {
+          const recentPool = flowHistoryItems.slice(-30).filter((item) => canRepeatFlowItem(item, nextIndex));
+          if (!recentPool.length) {
+            return null;
+          }
           const chorusStart = hashString(`chorus-pool:${sectionInfo.index}`) % recentPool.length;
           if (sectionInfo.itemIndex < 3) {
             const item = recentPool[(chorusStart + sectionInfo.itemIndex * 7) % recentPool.length];
-            return cloneFlowItem(item, {
+            return markFlowRepeat(cloneFlowItem(item, {
               repeatKind: "chorus",
-              repeatScale: 1.25 + sectionInfo.itemIndex * 0.08,
-            });
+            }), nextIndex);
           }
         }
-        if (flowMotifs.length > 0 && isFlowChorusSection(sectionInfo.index)) {
-          const motif = flowMotifs[hashString(`chorus:${sectionInfo.index}`) % flowMotifs.length];
+        if (flowMotifs.length > 0 && nextIndex > 0 && sectionInfo.index % 10 === 4) {
+          const availableMotifs = flowMotifs.filter((motif) =>
+            motif.items.some((item) => canRepeatFlowItem(item, nextIndex))
+          );
+          if (!availableMotifs.length) {
+            return null;
+          }
+          const motif = availableMotifs[hashString(`motif:${sectionInfo.index}`) % availableMotifs.length];
           if (sectionInfo.itemIndex < motif.items.length) {
+            const item = motif.items[sectionInfo.itemIndex % motif.items.length];
+            if (!canRepeatFlowItem(item, nextIndex)) {
+              return null;
+            }
             motif.repeats += sectionInfo.itemIndex === 0 ? 1 : 0;
-            return cloneFlowItem(motif.items[sectionInfo.itemIndex % motif.items.length], {
+            return markFlowRepeat(cloneFlowItem(item, {
               repeatKind: "motif",
-              repeatScale: 0.82 + motif.repeats * 0.18,
-            });
+            }), nextIndex);
           }
         }
         if (flowPlacedItems.length >= 8 && nextIndex > 0 && nextIndex % 19 === 5) {
-          const source = flowPlacedItems[hashString(`call-response:${nextIndex}`) % flowPlacedItems.length];
-          return cloneFlowItem(source.item, {
-            repeatKind: "response",
-            repeatScale: source.wasLarge ? 0.62 : 1.28,
-            responseSide: source.side === "left" ? "right" : "left",
-          });
-        }
-        if (flowBaselineItem && nextIndex > 0 && nextIndex % 17 === 3) {
-          return cloneFlowItem(flowBaselineItem, {
-            repeatKind: "baseline",
-            repeatScale: 0.72,
-          });
+          const candidates = flowPlacedItems.filter((source) => canRepeatFlowItem(source.item, nextIndex));
+          if (candidates.length) {
+            const source = candidates[hashString(`call-response:${nextIndex}`) % candidates.length];
+            return markFlowRepeat(cloneFlowItem(source.item, {
+              repeatKind: "response",
+            }), nextIndex);
+          }
         }
         const feedbackPeriods = [11, 23, 37];
         for (const period of feedbackPeriods) {
           if (flowPlacedItems.length > period && nextIndex > 0 && nextIndex % period === 0) {
             const source = flowPlacedItems[flowPlacedItems.length - period];
-            return cloneFlowItem(source.item, {
-              repeatKind: "feedback",
-              repeatScale: period === 11 ? 0.72 : period === 23 ? 1.05 : 1.32,
-            });
+            if (canRepeatFlowItem(source.item, nextIndex)) {
+              return markFlowRepeat(cloneFlowItem(source.item, {
+                repeatKind: "feedback",
+              }), nextIndex);
+            }
           }
         }
         if (flowMotifItems.length >= 3 && nextIndex > 0 && nextIndex % 23 >= 0 && nextIndex % 23 < flowMotifItems.length) {
-          return cloneFlowItem(flowMotifItems[(nextIndex + sectionInfo.index) % flowMotifItems.length], {
-            repeatKind: "motif-fragment",
-            repeatScale: 0.9,
-          });
+          const item = flowMotifItems[(nextIndex + sectionInfo.index) % flowMotifItems.length];
+          if (canRepeatFlowItem(item, nextIndex)) {
+            return markFlowRepeat(cloneFlowItem(item, {
+              repeatKind: "motif-fragment",
+            }), nextIndex);
+          }
         }
         if (flowHistoryItems.length >= 6 && nextIndex > 0 && nextIndex % 11 === 0) {
-          const historyIndex = hashString(`repeat-single:${nextIndex}`) % flowHistoryItems.length;
-          return cloneFlowItem(flowHistoryItems[historyIndex], {
-            repeatKind: "single",
-            repeatScale: 0.78,
-          });
+          const candidates = flowHistoryItems.filter((item) => canRepeatFlowItem(item, nextIndex));
+          if (candidates.length) {
+            const historyIndex = hashString(`repeat-single:${nextIndex}`) % candidates.length;
+            return markFlowRepeat(cloneFlowItem(candidates[historyIndex], {
+              repeatKind: "single",
+            }), nextIndex);
+          }
         }
         return null;
+      }
+
+      function canRepeatFlowItem(item, nextIndex) {
+        if (!item?.imageUrl) {
+          return false;
+        }
+        const firstSeenAt = Number(item.__flowSeenAt ?? 0);
+        const age = nextIndex - firstSeenAt;
+        if (age < FLOW_REPEAT_COOLDOWN || age > FLOW_REPEAT_MAX_AGE) {
+          return false;
+        }
+        const uses = flowRepeatUses.get(item.imageUrl) || 0;
+        if (uses >= FLOW_REPEAT_MAX_USES) {
+          return false;
+        }
+        const lastRepeatAt = flowLastRepeatAt.get(item.imageUrl);
+        return !Number.isFinite(lastRepeatAt) || nextIndex - lastRepeatAt >= FLOW_REPEAT_COOLDOWN;
+      }
+
+      function markFlowRepeat(item, nextIndex) {
+        if (!item?.imageUrl) {
+          return item;
+        }
+        flowRepeatUses.set(item.imageUrl, (flowRepeatUses.get(item.imageUrl) || 0) + 1);
+        flowLastRepeatAt.set(item.imageUrl, nextIndex);
+        return item;
+      }
+
+      function pruneFlowRepeatMemory(nextIndex) {
+        for (let index = flowHistoryItems.length - 1; index >= 0; index -= 1) {
+          const item = flowHistoryItems[index];
+          if (nextIndex - Number(item.__flowSeenAt ?? 0) > FLOW_REPEAT_MAX_AGE) {
+            flowHistoryItems.splice(index, 1);
+          }
+        }
+        for (let index = flowMotifItems.length - 1; index >= 0; index -= 1) {
+          const item = flowMotifItems[index];
+          if (nextIndex - Number(item.__flowSeenAt ?? 0) > FLOW_REPEAT_MAX_AGE) {
+            flowMotifItems.splice(index, 1);
+          }
+        }
+        for (let index = flowMotifs.length - 1; index >= 0; index -= 1) {
+          const motif = flowMotifs[index];
+          motif.items = motif.items.filter((item) => nextIndex - Number(item.__flowSeenAt ?? 0) <= FLOW_REPEAT_MAX_AGE);
+          if (!motif.items.length || nextIndex - motif.createdAt > FLOW_REPEAT_MAX_AGE) {
+            flowMotifs.splice(index, 1);
+          }
+        }
+        for (const [imageUrl, lastRepeatAt] of flowLastRepeatAt.entries()) {
+          if (nextIndex - lastRepeatAt > FLOW_REPEAT_MAX_AGE) {
+            flowLastRepeatAt.delete(imageUrl);
+            flowRepeatUses.delete(imageUrl);
+          }
+        }
       }
 
       function cloneFlowItem(item, meta = {}) {
         return {
           ...item,
           __repeatKind: meta.repeatKind || "",
-          __repeatScale: meta.repeatScale || 1,
-          __responseSide: meta.responseSide || "",
         };
       }
 
-      function isFlowChorusSection(sectionIndex) {
-        return sectionIndex > 2 && sectionIndex % 8 === 6;
-      }
-
       function buildFlowItemElement(item) {
-        const link = document.createElement("a");
-        link.className = "infinite-feed-item";
-        link.href = item.pageUrl || item.imageUrl;
-        link.target = "_blank";
-        link.rel = "noopener noreferrer";
+        const link = document.createElement(item.__isGroup ? "div" : "a");
+        link.className = item.__isGroup ? "infinite-feed-item infinite-feed-group" : "infinite-feed-item";
+        if (!item.__isGroup) {
+          link.href = item.pageUrl || item.imageUrl;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+        }
         link.dataset.imageUrl = item.imageUrl;
         link.dataset.repeatKind = item.__repeatKind || "";
-        link.dataset.repeatScale = String(item.__repeatScale || 1);
-        link.dataset.responseSide = item.__responseSide || "";
+        if (item.__isGroup) {
+          link.dataset.group = "true";
+          link.dataset.groupLayout = item.__groupLayout || "row";
+          link.dataset.groupCount = String(item.__groupItems?.length || 0);
+          link.style.setProperty("--flow-group-count", String(item.__groupItems?.length || 1));
+          for (const groupItem of item.__groupItems || []) {
+            const cell = document.createElement("a");
+            cell.className = "flow-group-cell";
+            cell.style.setProperty("--flow-group-cell-index", String(link.children.length + 1));
+            cell.href = groupItem.pageUrl || groupItem.imageUrl;
+            cell.target = "_blank";
+            cell.rel = "noopener noreferrer";
 
-        const img = document.createElement("img");
-        img.className = "infinite-feed-image";
-        img.alt = item.categoryName || item.categoryPath || "MonotaRO product image";
-        img.loading = "eager";
-        img.decoding = "async";
-        img.src = buildImageProxyUrl(item.imageUrl);
+            const img = document.createElement("img");
+            img.className = "infinite-feed-image";
+            img.alt = groupItem.categoryName || groupItem.categoryPath || "MonotaRO product image";
+            img.loading = "eager";
+            img.decoding = "async";
+            img.src = buildImageProxyUrl(groupItem.imageUrl);
 
-        link.append(img);
+            cell.append(img);
+            link.append(cell);
+          }
+        } else {
+          const img = document.createElement("img");
+          img.className = "infinite-feed-image";
+          img.alt = item.categoryName || item.categoryPath || "MonotaRO product image";
+          img.loading = "eager";
+          img.decoding = "async";
+          img.src = buildImageProxyUrl(item.imageUrl);
+
+          link.append(img);
+        }
+        link.dataset.category = item.categoryPath || item.categoryName || "";
         const placementIndex = infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
         applyFlowPlacement(link, item, placementIndex);
         return link;
@@ -582,10 +960,11 @@
           viewportWidth,
           layoutPattern,
           sizePattern,
-          repeatScale: item.__repeatScale || 1,
-          repeatKind: item.__repeatKind || "",
+          unitKind: item.__isGroup ? "group" : "single",
+          groupLayout: item.__groupLayout || "",
+          groupCount: item.__groupCount || 1,
         });
-        const itemHeight = Math.round(itemWidth * 1.18);
+        const itemHeight = Math.round(itemWidth * getFlowUnitHeightRatio(item));
         const maxLeft = Math.max(32, viewportWidth - itemWidth - 56);
         const preferredLeft = getFlowPreferredLeft({
           index: sectionItemIndex,
@@ -594,16 +973,20 @@
           itemWidth,
           maxLeft,
           layoutPattern,
-          responseSide: item.__responseSide || "",
+          sectionIndex,
         });
         const bandOffset = getFlowBandOffset({ index: sectionItemIndex, seed, itemHeight, layoutPattern });
         let left = preferredLeft;
         let top = Math.max(24, (sectionLayout ? sectionLayout.top : flowNextY) + bandOffset);
         const step = getFlowStep({ index: sectionItemIndex, seed, itemHeight, layoutPattern });
-        const gap = layoutPattern === "constellation" ? 34 : 28;
+        const gap = item.__isGroup
+          ? 44
+          : layoutPattern === "constellation"
+            ? 40
+            : 36;
         let candidate = null;
 
-        for (let attempt = 0; attempt < 18; attempt += 1) {
+        for (let attempt = 0; attempt < 28; attempt += 1) {
           const attemptSeed = hashString(`${seed}:${attempt}`);
           left = attempt === 0
             ? preferredLeft
@@ -614,7 +997,7 @@
             break;
           }
           if (attempt % 4 === 3) {
-            top += Math.round(itemHeight * 0.5);
+            top += Math.round(itemHeight * 0.62);
           }
         }
 
@@ -622,9 +1005,9 @@
         while (
           candidate &&
           flowPlacedRects.some((rect) => rectanglesOverlap(candidate, rect)) &&
-          settleAttempt < 24
+          settleAttempt < 40
         ) {
-          top += Math.round(itemHeight * 0.58);
+          top += Math.round(itemHeight * 0.72);
           candidate = { x: left - gap, y: top - gap, width: itemWidth + gap * 2, height: itemHeight + gap * 2 };
           settleAttempt += 1;
         }
@@ -632,20 +1015,33 @@
         element.style.left = `${left}px`;
         element.style.top = `${top}px`;
         element.style.width = `${itemWidth}px`;
+        element.style.height = `${itemHeight}px`;
+        element.dataset.sectionIndex = String(sectionIndex);
+        element.dataset.itemIndex = String(sectionItemIndex);
+        element.dataset.layoutPattern = layoutPattern;
+        element.dataset.sizePattern = sizePattern;
+        element.dataset.unit = item.__isGroup ? "group" : "image";
+        element.dataset.debugLabel = [
+          `S${sectionIndex}`,
+          layoutPattern,
+          item.__isGroup ? `group:${item.__groupLayout || "row"}` : "image",
+          item.categoryPath || item.categoryName || "",
+        ].filter(Boolean).join(" / ");
         flowPlacedRects.push({ x: left, y: top, width: itemWidth, height: itemHeight });
         flowPlacedItems.push({
           item,
           side: left + itemWidth / 2 < viewportWidth / 2 ? "left" : "right",
           wasLarge: itemWidth > viewportWidth * 0.34,
-          repeatKind: item.__repeatKind || "",
         });
         if (flowPlacedItems.length > 80) {
           flowPlacedItems.shift();
         }
         if (sectionLayout) {
           sectionLayout.bottom = Math.max(sectionLayout.bottom, top + itemHeight);
+          updateFlowSectionGuide({ sectionIndex, layoutPattern, top: sectionLayout.top, bottom: sectionLayout.bottom });
           flowNextY = Math.max(flowNextY, sectionLayout.top + sectionLayout.height, sectionLayout.bottom + 80);
         } else {
+          updateFlowSectionGuide({ sectionIndex, layoutPattern, top: Math.max(24, flowNextY), bottom: top + itemHeight });
           flowNextY = Math.max(flowNextY + step, top + itemHeight * 0.68);
         }
         infiniteFeedEl.style.minHeight = `${flowNextY + window.innerHeight}px`;
@@ -657,6 +1053,7 @@
           "center-medium-row",
           "same-size-horizontal",
           "same-size-vertical",
+          "big-with-group",
           "center-max-triplet",
           "matrix-9",
           "single-row",
@@ -664,22 +1061,12 @@
       }
 
       function getFlowLayoutPattern(sectionIndex) {
-        if (isFlowChorusSection(sectionIndex)) {
-          return sectionIndex % 16 === 6 ? "center-max-triplet" : "same-size-horizontal";
-        }
-        if (sectionIndex > 3 && sectionIndex % 7 === 4) {
-          return FLOW_LAYOUT_PATTERNS[(sectionIndex - 3) % FLOW_LAYOUT_PATTERNS.length];
-        }
-        if (sectionIndex > 5 && sectionIndex % 11 === 8) {
-          return FLOW_LAYOUT_PATTERNS[(sectionIndex - 5) % FLOW_LAYOUT_PATTERNS.length];
-        }
-        return FLOW_LAYOUT_PATTERNS[sectionIndex % FLOW_LAYOUT_PATTERNS.length];
+        const phraseOffset = Math.floor(sectionIndex / 6);
+        const syncopation = sectionIndex % 7 === 4 ? 3 : sectionIndex % 11 === 8 ? 5 : 0;
+        return FLOW_LAYOUT_PATTERNS[(sectionIndex + phraseOffset + syncopation) % FLOW_LAYOUT_PATTERNS.length];
       }
 
       function getFlowSizePattern({ sectionIndex, seed }) {
-        if (isFlowChorusSection(sectionIndex)) {
-          return sectionIndex % 16 === 6 ? "anchor-scale" : "binary";
-        }
         if (sectionIndex > 3 && sectionIndex % 7 === 4) {
           return "small-heavy";
         }
@@ -705,8 +1092,8 @@
       }
 
       function getFlowSectionItemCount(sectionIndex) {
-        if (isFlowChorusSection(sectionIndex)) {
-          return sectionIndex % 16 === 6 ? 4 : 3;
+        if (getFlowLayoutPattern(sectionIndex) === "big-with-group") {
+          return 2;
         }
         const cycle = sectionIndex % 10;
         if (cycle === 2 || cycle === 8) {
@@ -726,10 +1113,11 @@
           return;
         }
         const sectionGapSeed = hashString(`section-gap:${sectionIndex}`);
-        const baseGap = isFlowChorusSection(sectionIndex)
-          ? window.innerHeight * 0.68 + (sectionGapSeed % 420)
-          : window.innerHeight * 0.48 + (sectionGapSeed % 360);
-        const sectionGap = clamp(baseGap, isFlowChorusSection(sectionIndex) ? 620 : 460, isFlowChorusSection(sectionIndex) ? 1220 : 980);
+        const phraseBreak = sectionIndex % 5 === 0 || sectionIndex % 9 === 4;
+        const baseGap = phraseBreak
+          ? window.innerHeight * 0.62 + (sectionGapSeed % 420)
+          : window.innerHeight * 0.46 + (sectionGapSeed % 340);
+        const sectionGap = clamp(baseGap, phraseBreak ? 620 : 440, phraseBreak ? 1180 : 920);
         flowNextY += Math.round(sectionGap);
       }
 
@@ -752,10 +1140,42 @@
         return layout;
       }
 
+      function updateFlowSectionGuide({ sectionIndex, layoutPattern, top, bottom }) {
+        if (isMobileViewport()) {
+          return;
+        }
+        let guide = flowSectionGuides.get(sectionIndex);
+        if (!guide) {
+          guide = document.createElement("div");
+          guide.className = "flow-section-guide";
+          guide.dataset.sectionIndex = String(sectionIndex);
+          infiniteFeedEl.appendChild(guide);
+          flowSectionGuides.set(sectionIndex, guide);
+        }
+        const previousTop = Number(guide.dataset.top || top);
+        const previousBottom = Number(guide.dataset.bottom || bottom);
+        const nextTop = Math.min(previousTop, top);
+        const nextBottom = Math.max(previousBottom, bottom);
+        guide.dataset.top = String(nextTop);
+        guide.dataset.bottom = String(nextBottom);
+        guide.dataset.layoutPattern = layoutPattern;
+        guide.dataset.debugLabel = `Section ${sectionIndex} / ${layoutPattern}`;
+        guide.style.top = `${nextTop}px`;
+        guide.style.height = `${Math.max(80, nextBottom - nextTop)}px`;
+      }
+
+      function clearFlowSectionGuides() {
+        flowSectionGuides.forEach((guide) => guide.remove());
+        flowSectionGuides.clear();
+      }
+
       function getFlowSectionHeight({ layoutPattern, viewportWidth, sectionIndex }) {
         const seed = hashString(`section-height:${layoutPattern}:${sectionIndex}`);
         if (layoutPattern === "matrix-9" || layoutPattern === "single-row") {
           return Math.round(clamp(viewportWidth * 0.24 + (seed % 120), 300, 520));
+        }
+        if (layoutPattern === "big-with-group") {
+          return Math.round(clamp(viewportWidth * 0.52 + (seed % 180), 680, 1080));
         }
         if (layoutPattern === "center-max-triplet" || layoutPattern === "big-left-right") {
           return Math.round(clamp(viewportWidth * 0.46 + (seed % 180), 620, 960));
@@ -769,7 +1189,7 @@
         return Math.round(clamp(viewportWidth * 0.38 + (seed % 180), 520, 860));
       }
 
-      function getFlowItemWidth({ index, globalIndex, seed, viewportWidth, layoutPattern, sizePattern, repeatScale = 1, repeatKind = "" }) {
+      function getFlowItemWidth({ index, globalIndex, seed, viewportWidth, layoutPattern, sizePattern, unitKind = "single", groupLayout = "", groupCount = 1 }) {
         const tiny = [150, 210];
         const small = [190, 280];
         const medium = [270, 390];
@@ -786,6 +1206,8 @@
           range = [180, 260];
         } else if (globalIndex % 13 === 0) {
           range = large;
+        } else if (layoutPattern === "big-with-group") {
+          range = unitKind === "group" ? [310, 460] : [460, 680];
         } else if (layoutPattern === "big-left-right") {
           range = large;
         } else if (layoutPattern === "center-max-triplet") {
@@ -810,18 +1232,34 @@
         }
 
         const easedRoll = sizePattern === "small-heavy" ? roll ** 2.1 : roll ** 1.25;
-        const repeatBias = repeatKind === "baseline" ? 0.86 : repeatKind === "response" ? 1 : repeatKind ? repeatScale : 1;
-        return Math.round(clamp((range[0] + easedRoll * (range[1] - range[0])) * repeatBias, 110, viewportWidth * 0.52));
+        let width = range[0] + easedRoll * (range[1] - range[0]);
+        if (unitKind === "group") {
+          const groupScale = groupLayout === "column"
+            ? 0.88
+            : groupLayout.startsWith("stair")
+              ? 1.18 + groupCount * 0.08
+              : 1.34 + groupCount * 0.12;
+          width *= layoutPattern === "big-with-group" ? Math.min(groupScale, 1.28) : groupScale;
+        }
+        return Math.round(clamp(width, 110, viewportWidth * (unitKind === "group" ? 0.64 : 0.52)));
       }
 
-      function getFlowPreferredLeft({ index, seed, viewportWidth, itemWidth, maxLeft, layoutPattern, responseSide = "" }) {
+      function getFlowUnitHeightRatio(item) {
+        if (!item.__isGroup) {
+          return 1.42;
+        }
+        const count = Math.max(1, Number(item.__groupCount || item.__groupItems?.length || 1));
+        if (item.__groupLayout === "column") {
+          return count === 3 ? 1.86 : 1.34;
+        }
+        if (item.__groupLayout?.startsWith("stair")) {
+          return count === 3 ? 0.92 : 0.76;
+        }
+        return count === 3 ? 0.42 : 0.56;
+      }
+
+      function getFlowPreferredLeft({ index, seed, viewportWidth, itemWidth, maxLeft, layoutPattern, sectionIndex = 0 }) {
         const margin = 48;
-        if (responseSide === "left") {
-          return margin + 24;
-        }
-        if (responseSide === "right") {
-          return maxLeft - 24;
-        }
         const gridColumns = [0.08, 0.28, 0.48, 0.68, 0.84];
         if (layoutPattern === "grid-hang") {
           const column = gridColumns[index % gridColumns.length];
@@ -868,6 +1306,13 @@
         }
         if (layoutPattern === "wide-pair") {
           const side = index % 2 === 0 ? 0.18 : 0.62;
+          return clamp(Math.round(viewportWidth * side), margin, maxLeft);
+        }
+        if (layoutPattern === "big-with-group") {
+          const bigOnLeft = sectionIndex % 2 === 0;
+          const side = index === 0
+            ? (bigOnLeft ? 0.10 : 0.55)
+            : (bigOnLeft ? 0.56 : 0.12);
           return clamp(Math.round(viewportWidth * side), margin, maxLeft);
         }
         if (layoutPattern === "big-left-right") {
@@ -942,6 +1387,9 @@
         if (layoutPattern === "big-left-right") {
           return index % 2 === 0 ? jitter : Math.round(itemHeight * 0.16) + jitter;
         }
+        if (layoutPattern === "big-with-group") {
+          return index === 0 ? jitter : Math.round(itemHeight * 0.16) + jitter;
+        }
         if (layoutPattern === "center-max-triplet") {
           return Math.round((index % 3) * 10) + jitter * 0.25;
         }
@@ -993,6 +1441,11 @@
             ? Math.round(itemHeight * 0.78) + ((Math.floor(seed / 1089000)) % 120)
             : Math.round(itemHeight * 0.18);
         }
+        if (layoutPattern === "big-with-group") {
+          return index === 1
+            ? Math.round(itemHeight * 0.82) + ((Math.floor(seed / 1089000)) % 120)
+            : Math.round(itemHeight * 0.12);
+        }
         if (layoutPattern === "center-max-triplet") {
           return index % 3 === 2
             ? Math.round(itemHeight * 0.82) + ((Math.floor(seed / 1089000)) % 120)
@@ -1016,6 +1469,7 @@
         flowNextY = 0;
         flowPlacedRects.length = 0;
         flowSectionLayouts.clear();
+        clearFlowSectionGuides();
         infiniteFeedEl.style.minHeight = "";
         Array.from(infiniteFeedEl.querySelectorAll(".infinite-feed-item")).forEach((element, index) => {
           applyFlowPlacement(
@@ -1023,8 +1477,9 @@
             {
               imageUrl: element.dataset.imageUrl || String(index),
               __repeatKind: element.dataset.repeatKind || "",
-              __repeatScale: Number(element.dataset.repeatScale || 1),
-              __responseSide: element.dataset.responseSide || "",
+              __isGroup: element.dataset.group === "true",
+              __groupLayout: element.dataset.groupLayout || "",
+              __groupCount: Number(element.dataset.groupCount || 1),
             },
             index,
           );
@@ -1099,13 +1554,15 @@
         flowNextY = 0;
         flowPlacedRects.length = 0;
         flowSectionLayouts.clear();
+        flowSectionGuides.clear();
         flowSeenImageUrls.clear();
         flowHistoryItems.length = 0;
         flowMotifItems.length = 0;
         flowMotifs.length = 0;
         flowMotifDraft.length = 0;
         flowPlacedItems.length = 0;
-        flowBaselineItem = null;
+        flowRepeatUses.clear();
+        flowLastRepeatAt.clear();
       }
 
       function startFlowMode() {
@@ -1492,6 +1949,45 @@
         openRecPageOnRightClick(event, rec1El);
       });
 
+      settingsDotEl.addEventListener("click", () => {
+        const shouldOpen = settingsPanelEl.hidden;
+        settingsPanelEl.hidden = !shouldOpen;
+        settingsDotEl.setAttribute("aria-expanded", String(shouldOpen));
+        document.body.dataset.settingsOpen = shouldOpen ? "true" : "false";
+      });
+
+      settingsDotEl.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") {
+          return;
+        }
+        event.preventDefault();
+        settingsDotEl.click();
+      });
+
+      backgroundFilterInput.addEventListener("change", () => {
+        saveLocalSettings();
+        backgroundAnalysisCache.clear();
+        if (backgroundFilterInput.checked) {
+          cacheImageItems = cacheImageItems.filter((item) => !blockedImageUrls.has(item.imageUrl));
+          ensureCacheStock();
+        }
+        refreshCacheUi();
+      });
+
+      layoutDebugInput.addEventListener("change", () => {
+        saveLocalSettings();
+        updateLayoutDebugMode();
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape" || settingsPanelEl.hidden) {
+          return;
+        }
+        settingsPanelEl.hidden = true;
+        settingsDotEl.setAttribute("aria-expanded", "false");
+        document.body.dataset.settingsOpen = "false";
+      });
+
       window.addEventListener("scroll", () => {
         maintainInfiniteFeed();
       }, { passive: true });
@@ -1534,7 +2030,7 @@
           lastUrlCount = Number(data.url_count || 0);
           lastImageCount = Number(data.image_count || 0);
           const initialItems = extractUniqueImageItemsFromData(data);
-          mergeIntoCache(initialItems, targetCount);
+          await mergeIntoCache(initialItems, targetCount);
           refreshCacheUi();
           if (displayMode === "flow") {
             startFlowMode();
@@ -1568,6 +2064,7 @@
 
       window.addEventListener("load", () => {
         loadLocalSettings();
+        updateLayoutDebugMode();
         if (categoryDataInput) {
           categoryDataInput.title = "Copied from monotaro-category-scraper/data/all-categories.deep.categories.csv";
         }
