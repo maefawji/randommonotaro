@@ -6,71 +6,52 @@
     <title>Webpage Image Viewer</title>
     <link rel="stylesheet" href="./style.css" />
   </head>
-  <body data-page-mode="b" data-page-key="web">
+  <body data-page-mode="b" data-page-key="web" data-display-mode="flow">
     <main class="app-shell">
       <section
         id="gallery"
         class="gallery"
-        aria-label="Wall surface"
+        aria-label="Infinite image stream"
         style="width:100vw;margin-left:calc(50% - 50vw);display:flex;justify-content:center;"
       >
         <section
           id="wall-surface"
           class="wall-surface"
+          hidden
           style="position:relative;width:clamp(320px,92vw,1400px);min-height:70vh;border:none;background:#fff;overflow:hidden;"
         >
           <div id="bounding-box" class="bounding-box"></div>
         </section>
+        <section id="infinite-feed" class="infinite-feed" aria-label="Infinite image stream"></section>
       </section>
 
-      <section class="e-lab">
-        <form id="fetch-form" class="fetch-form">
-          <details class="web-advanced">
-            <summary>Advanced</summary>
-            <section class="web-advanced-section">
-              <h4 class="web-advanced-title">MonotaRO Category Logic</h4>
-              <div class="input-grid web-settings-grid">
-                <label>
-                  <span>Category Data File</span>
-                  <input id="category-data-input" name="category_data" type="text" value="backend/data/monotaro_categories.deep.csv" readonly />
-                </label>
-                <label>
-                  <span>Random Products / Load</span>
-                  <input id="max-pages-input" name="max_pages" type="number" min="1" max="500" value="100" />
-                </label>
-                <label>
-                  <span>Cookie Header (optional)</span>
-                  <input id="cookie-input" name="cookie" type="text" placeholder="session=...; token=..." />
-                </label>
-                <label>
-                  <span>Delay (ms)</span>
-                  <input id="delay-ms-input" name="delay_ms" type="number" min="0" max="5000" value="180" />
-                </label>
-              </div>
-            </section>
-            <p id="crawl-state" class="meta">Crawl state: idle</p>
-            <p id="advanced-result" class="meta">Result: not loaded yet.</p>
-            <p id="cached-page-urls" class="meta" style="white-space: pre-line;">Cached Page URLs: (none)</p>
-            <p id="cached-image-urls" class="meta" style="white-space: pre-line;">Cached Image URLs: (none)</p>
-          </details>
-          <button id="submit-button" type="submit">Load Images</button>
-        </form>
-        <div class="e-lab-header">
-          <p id="status" class="meta">No images loaded yet.</p>
-          <a id="reroll-button" href="#" class="e-reroll-button">Reroll Rec1</a>
+      <section class="e-lab" hidden>
+        <input id="category-data-input" name="category_data" type="hidden" value="backend/data/monotaro_categories.deep.csv" readonly />
+        <input id="max-pages-input" name="max_pages" type="hidden" min="1" max="200" value="48" />
+        <input id="cookie-input" name="cookie" type="hidden" value="" />
+        <input id="delay-ms-input" name="delay_ms" type="hidden" min="0" max="5000" value="0" />
+        <p id="status" class="meta">Loading images...</p>
+        <p id="crawl-state" class="meta">Crawl state: idle</p>
+        <p id="advanced-result" class="meta">Result: not loaded yet.</p>
+        <p id="cached-page-urls" class="meta">Cached Page URLs: (none)</p>
+        <p id="cached-image-urls" class="meta">Cached Image URLs: (none)</p>
+        <div id="local-stats" class="local-stats" aria-live="polite">
+          <span>Cache 0</span>
+          <span>Placed 0</span>
+          <span>Blocked 0</span>
         </div>
       </section>
 
-      <nav class="page-nav" aria-label="View pages">
-        <a class="page-nav-link is-current" href="./index.html">Web Page</a>
-      </nav>
+      <div id="flow-loader" class="flow-loader" aria-live="polite">
+        <span class="flow-loader-dot"></span>
+        <span id="flow-loader-text">Loading images...</span>
+      </div>
     </main>
 
     <script>
       const wallEl = document.getElementById("wall-surface");
+      const infiniteFeedEl = document.getElementById("infinite-feed");
       const rec1El = document.getElementById("bounding-box");
-      const rerollButton = document.getElementById("reroll-button");
-      const form = document.getElementById("fetch-form");
       const categoryDataInput = document.getElementById("category-data-input");
       const maxPagesInput = document.getElementById("max-pages-input");
       const cookieInput = document.getElementById("cookie-input");
@@ -80,25 +61,82 @@
       const cachedPageUrlsEl = document.getElementById("cached-page-urls");
       const cachedImageUrlsEl = document.getElementById("cached-image-urls");
       const crawlStateEl = document.getElementById("crawl-state");
+      const localStatsEl = document.getElementById("local-stats");
+      const flowLoaderEl = document.getElementById("flow-loader");
+      const flowLoaderTextEl = document.getElementById("flow-loader-text");
 
       const API_BASE = "";
+      const LOCAL_SETTINGS_KEY = "webpage-viewer-local-settings-v2";
       let recCount = 1;
       let cacheImageItems = [];
       let isPlacing = false;
       let isCacheRefilling = false;
       let isLoadingImages = false;
+      let isFlowAppending = false;
+      let displayMode = "flow";
+      let flowNextY = 0;
       let removeUnderMode = true;
       let lastUrlCount = 0;
       let lastImageCount = 0;
       let cacheMonitorId = null;
       const blockedImageUrls = new Set();
       const blockedPageUrls = new Set();
-      const PREFETCH_COUNT = 100;
+      const INITIAL_PRODUCT_COUNT = 4;
+      const INITIAL_PLACE_COUNT = 3;
+      const MAX_ASPECT_PREFETCH = 8;
+      const FLOW_INITIAL_COUNT = 10;
+      const FLOW_APPEND_BATCH = 6;
+      const FLOW_AHEAD_PX = 2600;
+      const MOBILE_BREAKPOINT_PX = 760;
+      const FLOW_SECTION_DEFAULT_ITEM_COUNT = 9;
+      const FLOW_LAYOUT_PATTERNS = [
+        "grid-hang",
+        "off-grid",
+        "anchor-small",
+        "big-with-small-row",
+        "center-medium-row",
+        "same-size-horizontal",
+        "same-size-vertical",
+        "big-left-right",
+        "center-max-triplet",
+        "matrix-9",
+        "single-row",
+        "constellation",
+        "wide-pair",
+      ];
+      const FLOW_SIZE_PATTERNS = ["small-heavy", "binary", "medium-run", "anchor-scale"];
       const aspectQueue = [];
       const readyAspects = [];
+      const queuedAspectUrls = new Set();
+      const flowSeenImageUrls = new Set();
+      const flowPlacedRects = [];
+      const flowSectionLayouts = new Map();
+      const flowHistoryItems = [];
+      const flowMotifItems = [];
+      const flowMotifs = [];
+      const flowMotifDraft = [];
+      const flowPlacedItems = [];
+      let flowBaselineItem = null;
 
       function randomBetween(min, max) {
         return min + Math.random() * (max - min);
+      }
+
+      function hashString(value) {
+        let hash = 2166136261;
+        for (let index = 0; index < value.length; index += 1) {
+          hash ^= value.charCodeAt(index);
+          hash = Math.imul(hash, 16777619);
+        }
+        return Math.abs(hash >>> 0);
+      }
+
+      function isMobileViewport() {
+        return window.innerWidth <= MOBILE_BREAKPOINT_PX;
+      }
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
       }
 
       function flattenImages(pages) {
@@ -166,6 +204,7 @@
         const resultText = `Result: URLs ${lastUrlCount} / Images ${lastImageCount} / Cached ${cacheImageItems.length}`;
         statusEl.textContent = resultText.replace("Result: ", "");
         advancedResultEl.textContent = resultText;
+        refreshLocalStats();
       }
 
       function refreshCacheUi() {
@@ -174,11 +213,82 @@
         updateResultText();
       }
 
-      function ensureCacheStock() {
-        if (isLoadingImages || cacheImageItems.length >= PREFETCH_COUNT || isCacheRefilling) {
+      function refreshLocalStats() {
+        const placedCount = wallEl.querySelectorAll('.bounding-box[data-ready="true"]').length;
+        const flowCount = infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
+        const blockedCount = blockedImageUrls.size + blockedPageUrls.size;
+        localStatsEl.innerHTML = [
+          `<span>Cache ${cacheImageItems.length}</span>`,
+          `<span>Placed ${displayMode === "flow" ? flowCount : placedCount}</span>`,
+          `<span>Blocked ${blockedCount}</span>`,
+        ].join("");
+      }
+
+      function setBusy(isBusy) {
+        document.body.dataset.loading = isBusy ? "true" : "false";
+      }
+
+      function updateFlowLoader(message) {
+        if (!flowLoaderEl || !flowLoaderTextEl) {
           return;
         }
-        refillCacheToTarget(PREFETCH_COUNT);
+        const placedCount = infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
+        const isActive = isLoadingImages || isCacheRefilling || isFlowAppending;
+        flowLoaderEl.dataset.active = isActive ? "true" : "false";
+        flowLoaderTextEl.textContent = message || (
+          isActive
+            ? "Loading images..."
+            : `${placedCount} images loaded`
+        );
+      }
+
+      function loadLocalSettings() {
+        try {
+          const raw = window.localStorage.getItem(LOCAL_SETTINGS_KEY);
+          if (!raw) {
+            return;
+          }
+          const settings = JSON.parse(raw);
+          if (settings.maxPages) {
+            maxPagesInput.value = settings.maxPages;
+          }
+          if (settings.delayMs) {
+            delayMsInput.value = settings.delayMs;
+          }
+        } catch (error) {
+          window.localStorage.removeItem(LOCAL_SETTINGS_KEY);
+        }
+      }
+
+      function saveLocalSettings() {
+        const settings = {
+          maxPages: maxPagesInput.value,
+          delayMs: delayMsInput.value,
+        };
+        window.localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(settings));
+      }
+
+      function getCacheTarget() {
+        const value = Number(maxPagesInput.value);
+        if (!Number.isFinite(value)) {
+          return 48;
+        }
+        return Math.max(1, Math.min(200, Math.floor(value)));
+      }
+
+      function ensureCacheStock() {
+        const targetCount = getCacheTarget();
+        if (cacheImageItems.length >= targetCount || isCacheRefilling) {
+          return;
+        }
+        refillCacheToTarget(targetCount);
+      }
+
+      function setDisplayMode(nextMode) {
+        displayMode = "flow";
+        document.body.dataset.displayMode = displayMode;
+        refreshLocalStats();
+        startFlowMode();
       }
 
       function startCacheMonitor() {
@@ -210,7 +320,7 @@
         return unique;
       }
 
-      function mergeIntoCache(newItems, targetCount = PREFETCH_COUNT) {
+      function mergeIntoCache(newItems, targetCount = getCacheTarget()) {
         const existing = new Set(cacheImageItems.map((item) => item.imageUrl));
         for (const item of newItems) {
           if (!item?.imageUrl || existing.has(item.imageUrl)) {
@@ -248,11 +358,12 @@
         };
       }
 
-      async function refillCacheToTarget(targetCount = PREFETCH_COUNT) {
+      async function refillCacheToTarget(targetCount = getCacheTarget()) {
         if (isCacheRefilling) {
           return;
         }
         isCacheRefilling = true;
+        updateFlowLoader("Loading more images...");
         crawlStateEl.textContent = "Crawl state: picking random categories...";
         try {
           let safety = 0;
@@ -274,10 +385,16 @@
 
           refreshCacheUi();
           aspectQueue.length = 0;
-          fillAspectQueue();
+          if (displayMode === "wall") {
+            fillAspectQueue();
+          }
+          if (displayMode === "flow") {
+            maintainInfiniteFeed();
+          }
         } finally {
           isCacheRefilling = false;
           crawlStateEl.textContent = "Crawl state: idle";
+          updateFlowLoader();
         }
       }
 
@@ -287,6 +404,729 @@
           cookie: cookieInput.value.trim(),
         });
         return `${API_BASE}/api/image?${query.toString()}`;
+      }
+
+      function takeNextFlowItem() {
+        const historyPick = pickRepeatedFlowItem();
+        if (historyPick) {
+          return historyPick;
+        }
+
+        const nextIndex = cacheImageItems.findIndex((item) =>
+          item?.imageUrl && !flowSeenImageUrls.has(item.imageUrl)
+        );
+        if (nextIndex < 0) {
+          return null;
+        }
+        const [item] = cacheImageItems.splice(nextIndex, 1);
+        flowSeenImageUrls.add(item.imageUrl);
+        rememberFlowItem(item);
+        return item;
+      }
+
+      function rememberFlowItem(item) {
+        if (!item?.imageUrl) {
+          return;
+        }
+        flowHistoryItems.push(item);
+        if (flowHistoryItems.length > 36) {
+          flowHistoryItems.shift();
+        }
+        if (!flowBaselineItem && flowHistoryItems.length >= 4) {
+          flowBaselineItem = item;
+        }
+        flowMotifItems.push(item);
+        if (flowMotifItems.length > 5) {
+          flowMotifItems.shift();
+        }
+        flowMotifDraft.push(item);
+        if (flowMotifDraft.length >= 4) {
+          flowMotifs.push({
+            createdAt: infiniteFeedEl.querySelectorAll(".infinite-feed-item").length,
+            items: flowMotifDraft.slice(-4),
+            repeats: 0,
+          });
+          if (flowMotifs.length > 8) {
+            flowMotifs.shift();
+          }
+          flowMotifDraft.splice(0, 2);
+        }
+      }
+
+      function pickRepeatedFlowItem() {
+        const nextIndex = infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
+        const sectionInfo = getFlowSectionInfo(nextIndex);
+        if (flowHistoryItems.length >= 12 && isFlowChorusSection(sectionInfo.index)) {
+          const recentPool = flowHistoryItems.slice(-30);
+          const chorusStart = hashString(`chorus-pool:${sectionInfo.index}`) % recentPool.length;
+          if (sectionInfo.itemIndex < 3) {
+            const item = recentPool[(chorusStart + sectionInfo.itemIndex * 7) % recentPool.length];
+            return cloneFlowItem(item, {
+              repeatKind: "chorus",
+              repeatScale: 1.25 + sectionInfo.itemIndex * 0.08,
+            });
+          }
+        }
+        if (flowMotifs.length > 0 && isFlowChorusSection(sectionInfo.index)) {
+          const motif = flowMotifs[hashString(`chorus:${sectionInfo.index}`) % flowMotifs.length];
+          if (sectionInfo.itemIndex < motif.items.length) {
+            motif.repeats += sectionInfo.itemIndex === 0 ? 1 : 0;
+            return cloneFlowItem(motif.items[sectionInfo.itemIndex % motif.items.length], {
+              repeatKind: "motif",
+              repeatScale: 0.82 + motif.repeats * 0.18,
+            });
+          }
+        }
+        if (flowPlacedItems.length >= 8 && nextIndex > 0 && nextIndex % 19 === 5) {
+          const source = flowPlacedItems[hashString(`call-response:${nextIndex}`) % flowPlacedItems.length];
+          return cloneFlowItem(source.item, {
+            repeatKind: "response",
+            repeatScale: source.wasLarge ? 0.62 : 1.28,
+            responseSide: source.side === "left" ? "right" : "left",
+          });
+        }
+        if (flowBaselineItem && nextIndex > 0 && nextIndex % 17 === 3) {
+          return cloneFlowItem(flowBaselineItem, {
+            repeatKind: "baseline",
+            repeatScale: 0.72,
+          });
+        }
+        const feedbackPeriods = [11, 23, 37];
+        for (const period of feedbackPeriods) {
+          if (flowPlacedItems.length > period && nextIndex > 0 && nextIndex % period === 0) {
+            const source = flowPlacedItems[flowPlacedItems.length - period];
+            return cloneFlowItem(source.item, {
+              repeatKind: "feedback",
+              repeatScale: period === 11 ? 0.72 : period === 23 ? 1.05 : 1.32,
+            });
+          }
+        }
+        if (flowMotifItems.length >= 3 && nextIndex > 0 && nextIndex % 23 >= 0 && nextIndex % 23 < flowMotifItems.length) {
+          return cloneFlowItem(flowMotifItems[(nextIndex + sectionInfo.index) % flowMotifItems.length], {
+            repeatKind: "motif-fragment",
+            repeatScale: 0.9,
+          });
+        }
+        if (flowHistoryItems.length >= 6 && nextIndex > 0 && nextIndex % 11 === 0) {
+          const historyIndex = hashString(`repeat-single:${nextIndex}`) % flowHistoryItems.length;
+          return cloneFlowItem(flowHistoryItems[historyIndex], {
+            repeatKind: "single",
+            repeatScale: 0.78,
+          });
+        }
+        return null;
+      }
+
+      function cloneFlowItem(item, meta = {}) {
+        return {
+          ...item,
+          __repeatKind: meta.repeatKind || "",
+          __repeatScale: meta.repeatScale || 1,
+          __responseSide: meta.responseSide || "",
+        };
+      }
+
+      function isFlowChorusSection(sectionIndex) {
+        return sectionIndex > 2 && sectionIndex % 8 === 6;
+      }
+
+      function buildFlowItemElement(item) {
+        const link = document.createElement("a");
+        link.className = "infinite-feed-item";
+        link.href = item.pageUrl || item.imageUrl;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.dataset.imageUrl = item.imageUrl;
+        link.dataset.repeatKind = item.__repeatKind || "";
+        link.dataset.repeatScale = String(item.__repeatScale || 1);
+        link.dataset.responseSide = item.__responseSide || "";
+
+        const img = document.createElement("img");
+        img.className = "infinite-feed-image";
+        img.alt = item.categoryName || item.categoryPath || "MonotaRO product image";
+        img.loading = "eager";
+        img.decoding = "async";
+        img.src = buildImageProxyUrl(item.imageUrl);
+
+        link.append(img);
+        const placementIndex = infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
+        applyFlowPlacement(link, item, placementIndex);
+        return link;
+      }
+
+      function applyFlowPlacement(element, item, index) {
+        if (isMobileViewport()) {
+          element.style.cssText = "";
+          return;
+        }
+
+        const imageUrl = item.imageUrl;
+        const seed = hashString(`${imageUrl}:${index}`);
+        const viewportWidth = Math.max(window.innerWidth, 960);
+        const sectionInfo = getFlowSectionInfo(index);
+        const sectionIndex = sectionInfo.index;
+        const sectionItemIndex = sectionInfo.itemIndex;
+        const layoutPattern = getFlowLayoutPattern(sectionIndex);
+        const sizePattern = getFlowSizePattern({ sectionIndex, seed });
+        const useGridSection = isFlowGridSection(layoutPattern);
+        const sectionLayout = useGridSection
+          ? getFlowSectionLayout({ sectionIndex, layoutPattern, viewportWidth })
+          : null;
+        if (!useGridSection && sectionItemIndex === 0) {
+          openFlowSectionSpace(sectionIndex);
+        }
+        const itemWidth = getFlowItemWidth({
+          index: sectionItemIndex,
+          globalIndex: index,
+          seed,
+          viewportWidth,
+          layoutPattern,
+          sizePattern,
+          repeatScale: item.__repeatScale || 1,
+          repeatKind: item.__repeatKind || "",
+        });
+        const itemHeight = Math.round(itemWidth * 1.18);
+        const maxLeft = Math.max(32, viewportWidth - itemWidth - 56);
+        const preferredLeft = getFlowPreferredLeft({
+          index: sectionItemIndex,
+          seed,
+          viewportWidth,
+          itemWidth,
+          maxLeft,
+          layoutPattern,
+          responseSide: item.__responseSide || "",
+        });
+        const bandOffset = getFlowBandOffset({ index: sectionItemIndex, seed, itemHeight, layoutPattern });
+        let left = preferredLeft;
+        let top = Math.max(24, (sectionLayout ? sectionLayout.top : flowNextY) + bandOffset);
+        const step = getFlowStep({ index: sectionItemIndex, seed, itemHeight, layoutPattern });
+        const gap = layoutPattern === "constellation" ? 34 : 28;
+        let candidate = null;
+
+        for (let attempt = 0; attempt < 18; attempt += 1) {
+          const attemptSeed = hashString(`${seed}:${attempt}`);
+          left = attempt === 0
+            ? preferredLeft
+            : getFlowFallbackLeft({ attemptSeed, viewportWidth, itemWidth, maxLeft, layoutPattern });
+          candidate = { x: left - gap, y: top - gap, width: itemWidth + gap * 2, height: itemHeight + gap * 2 };
+          const hasOverlap = flowPlacedRects.some((rect) => rectanglesOverlap(candidate, rect));
+          if (!hasOverlap) {
+            break;
+          }
+          if (attempt % 4 === 3) {
+            top += Math.round(itemHeight * 0.5);
+          }
+        }
+
+        let settleAttempt = 0;
+        while (
+          candidate &&
+          flowPlacedRects.some((rect) => rectanglesOverlap(candidate, rect)) &&
+          settleAttempt < 24
+        ) {
+          top += Math.round(itemHeight * 0.58);
+          candidate = { x: left - gap, y: top - gap, width: itemWidth + gap * 2, height: itemHeight + gap * 2 };
+          settleAttempt += 1;
+        }
+
+        element.style.left = `${left}px`;
+        element.style.top = `${top}px`;
+        element.style.width = `${itemWidth}px`;
+        flowPlacedRects.push({ x: left, y: top, width: itemWidth, height: itemHeight });
+        flowPlacedItems.push({
+          item,
+          side: left + itemWidth / 2 < viewportWidth / 2 ? "left" : "right",
+          wasLarge: itemWidth > viewportWidth * 0.34,
+          repeatKind: item.__repeatKind || "",
+        });
+        if (flowPlacedItems.length > 80) {
+          flowPlacedItems.shift();
+        }
+        if (sectionLayout) {
+          sectionLayout.bottom = Math.max(sectionLayout.bottom, top + itemHeight);
+          flowNextY = Math.max(flowNextY, sectionLayout.top + sectionLayout.height, sectionLayout.bottom + 80);
+        } else {
+          flowNextY = Math.max(flowNextY + step, top + itemHeight * 0.68);
+        }
+        infiniteFeedEl.style.minHeight = `${flowNextY + window.innerHeight}px`;
+      }
+
+      function isFlowGridSection(layoutPattern) {
+        return new Set([
+          "big-with-small-row",
+          "center-medium-row",
+          "same-size-horizontal",
+          "same-size-vertical",
+          "center-max-triplet",
+          "matrix-9",
+          "single-row",
+        ]).has(layoutPattern);
+      }
+
+      function getFlowLayoutPattern(sectionIndex) {
+        if (isFlowChorusSection(sectionIndex)) {
+          return sectionIndex % 16 === 6 ? "center-max-triplet" : "same-size-horizontal";
+        }
+        if (sectionIndex > 3 && sectionIndex % 7 === 4) {
+          return FLOW_LAYOUT_PATTERNS[(sectionIndex - 3) % FLOW_LAYOUT_PATTERNS.length];
+        }
+        if (sectionIndex > 5 && sectionIndex % 11 === 8) {
+          return FLOW_LAYOUT_PATTERNS[(sectionIndex - 5) % FLOW_LAYOUT_PATTERNS.length];
+        }
+        return FLOW_LAYOUT_PATTERNS[sectionIndex % FLOW_LAYOUT_PATTERNS.length];
+      }
+
+      function getFlowSizePattern({ sectionIndex, seed }) {
+        if (isFlowChorusSection(sectionIndex)) {
+          return sectionIndex % 16 === 6 ? "anchor-scale" : "binary";
+        }
+        if (sectionIndex > 3 && sectionIndex % 7 === 4) {
+          return "small-heavy";
+        }
+        return FLOW_SIZE_PATTERNS[(sectionIndex + Math.floor(seed / 1000)) % FLOW_SIZE_PATTERNS.length];
+      }
+
+      function getFlowSectionInfo(globalIndex) {
+        let start = 0;
+        let sectionIndex = 0;
+        while (true) {
+          const itemCount = getFlowSectionItemCount(sectionIndex);
+          if (globalIndex < start + itemCount) {
+            return {
+              index: sectionIndex,
+              itemIndex: globalIndex - start,
+              itemCount,
+              start,
+            };
+          }
+          start += itemCount;
+          sectionIndex += 1;
+        }
+      }
+
+      function getFlowSectionItemCount(sectionIndex) {
+        if (isFlowChorusSection(sectionIndex)) {
+          return sectionIndex % 16 === 6 ? 4 : 3;
+        }
+        const cycle = sectionIndex % 10;
+        if (cycle === 2 || cycle === 8) {
+          return 4;
+        }
+        if (cycle === 5) {
+          return 3;
+        }
+        if (cycle === 7) {
+          return 12;
+        }
+        return FLOW_SECTION_DEFAULT_ITEM_COUNT;
+      }
+
+      function openFlowSectionSpace(sectionIndex) {
+        if (sectionIndex <= 0) {
+          return;
+        }
+        const sectionGapSeed = hashString(`section-gap:${sectionIndex}`);
+        const baseGap = isFlowChorusSection(sectionIndex)
+          ? window.innerHeight * 0.68 + (sectionGapSeed % 420)
+          : window.innerHeight * 0.48 + (sectionGapSeed % 360);
+        const sectionGap = clamp(baseGap, isFlowChorusSection(sectionIndex) ? 620 : 460, isFlowChorusSection(sectionIndex) ? 1220 : 980);
+        flowNextY += Math.round(sectionGap);
+      }
+
+      function getFlowSectionLayout({ sectionIndex, layoutPattern, viewportWidth }) {
+        const existing = flowSectionLayouts.get(sectionIndex);
+        if (existing) {
+          return existing;
+        }
+
+        openFlowSectionSpace(sectionIndex);
+
+        const height = getFlowSectionHeight({ layoutPattern, viewportWidth, sectionIndex });
+        const layout = {
+          top: Math.max(24, flowNextY),
+          height,
+          bottom: Math.max(24, flowNextY),
+        };
+        flowSectionLayouts.set(sectionIndex, layout);
+        flowNextY = Math.max(flowNextY, layout.top + layout.height);
+        return layout;
+      }
+
+      function getFlowSectionHeight({ layoutPattern, viewportWidth, sectionIndex }) {
+        const seed = hashString(`section-height:${layoutPattern}:${sectionIndex}`);
+        if (layoutPattern === "matrix-9" || layoutPattern === "single-row") {
+          return Math.round(clamp(viewportWidth * 0.24 + (seed % 120), 300, 520));
+        }
+        if (layoutPattern === "center-max-triplet" || layoutPattern === "big-left-right") {
+          return Math.round(clamp(viewportWidth * 0.46 + (seed % 180), 620, 960));
+        }
+        if (layoutPattern === "same-size-vertical") {
+          return Math.round(clamp(viewportWidth * 0.54 + (seed % 180), 680, 1080));
+        }
+        if (layoutPattern === "constellation") {
+          return Math.round(clamp(viewportWidth * 0.42 + (seed % 220), 560, 920));
+        }
+        return Math.round(clamp(viewportWidth * 0.38 + (seed % 180), 520, 860));
+      }
+
+      function getFlowItemWidth({ index, globalIndex, seed, viewportWidth, layoutPattern, sizePattern, repeatScale = 1, repeatKind = "" }) {
+        const tiny = [150, 210];
+        const small = [190, 280];
+        const medium = [270, 390];
+        const large = [420, 620];
+        const wide = [460, 700];
+        const roll = (seed % 1000) / 1000;
+        let range = small;
+
+        if (layoutPattern === "constellation") {
+          range = index % 4 === 0 ? medium : tiny;
+        } else if (layoutPattern === "matrix-9") {
+          range = [110, 170];
+        } else if (layoutPattern === "single-row") {
+          range = [180, 260];
+        } else if (globalIndex % 13 === 0) {
+          range = large;
+        } else if (layoutPattern === "big-left-right") {
+          range = large;
+        } else if (layoutPattern === "center-max-triplet") {
+          range = [480, 720];
+        } else if (layoutPattern === "same-size-horizontal" || layoutPattern === "same-size-vertical") {
+          range = index % 6 < 3 ? small : medium;
+        } else if (layoutPattern === "big-with-small-row") {
+          const role = index % 4;
+          range = role === 0 ? large : tiny;
+        } else if (layoutPattern === "center-medium-row") {
+          range = medium;
+        } else if (layoutPattern === "anchor-small") {
+          range = index % 5 === 0 ? large : (index % 2 === 0 ? tiny : small);
+        } else if (layoutPattern === "wide-pair") {
+          range = index % 2 === 0 ? wide : small;
+        } else if (sizePattern === "binary") {
+          range = index % 3 === 0 ? large : tiny;
+        } else if (sizePattern === "anchor-scale") {
+          range = index % 6 === 0 ? large : medium;
+        } else if (sizePattern === "medium-run") {
+          range = medium;
+        }
+
+        const easedRoll = sizePattern === "small-heavy" ? roll ** 2.1 : roll ** 1.25;
+        const repeatBias = repeatKind === "baseline" ? 0.86 : repeatKind === "response" ? 1 : repeatKind ? repeatScale : 1;
+        return Math.round(clamp((range[0] + easedRoll * (range[1] - range[0])) * repeatBias, 110, viewportWidth * 0.52));
+      }
+
+      function getFlowPreferredLeft({ index, seed, viewportWidth, itemWidth, maxLeft, layoutPattern, responseSide = "" }) {
+        const margin = 48;
+        if (responseSide === "left") {
+          return margin + 24;
+        }
+        if (responseSide === "right") {
+          return maxLeft - 24;
+        }
+        const gridColumns = [0.08, 0.28, 0.48, 0.68, 0.84];
+        if (layoutPattern === "grid-hang") {
+          const column = gridColumns[index % gridColumns.length];
+          return clamp(Math.round(viewportWidth * column - itemWidth / 2), margin, maxLeft);
+        }
+        if (layoutPattern === "anchor-small") {
+          if (index % 5 === 0) {
+            return index % 10 === 0 ? margin + 24 : maxLeft - 24;
+          }
+          const sideColumn = index % 2 === 0 ? 0.35 : 0.66;
+          return clamp(Math.round(viewportWidth * sideColumn - itemWidth / 2), margin, maxLeft);
+        }
+        if (layoutPattern === "constellation") {
+          const clusterColumns = [0.22, 0.42, 0.58, 0.74, 0.33];
+          return clamp(Math.round(viewportWidth * clusterColumns[index % clusterColumns.length] - itemWidth / 2), margin, maxLeft);
+        }
+        if (layoutPattern === "big-with-small-row") {
+          const role = index % 4;
+          const anchorLeft = index % 8 < 4 ? 0.17 : 0.52;
+          const smallStart = anchorLeft < 0.3 ? 0.5 : 0.18;
+          if (role === 0) {
+            return clamp(Math.round(viewportWidth * anchorLeft), margin, maxLeft);
+          }
+          return clamp(Math.round(viewportWidth * (smallStart + (role - 1) * 0.1)), margin, maxLeft);
+        }
+        if (layoutPattern === "center-medium-row") {
+          const rowCount = 3 + (Math.floor(seed / 2000) % 2);
+          const role = index % rowCount;
+          const totalWidth = rowCount * itemWidth + (rowCount - 1) * 42;
+          const start = (viewportWidth - totalWidth) / 2;
+          return clamp(Math.round(start + role * (itemWidth + 42)), margin, maxLeft);
+        }
+        if (layoutPattern === "same-size-horizontal") {
+          const groupCount = 2 + (Math.floor(seed / 3000) % 2);
+          const role = index % groupCount;
+          const itemGap = 22;
+          const totalWidth = groupCount * itemWidth + (groupCount - 1) * itemGap;
+          const start = (viewportWidth - totalWidth) / 2;
+          return clamp(Math.round(start + role * (itemWidth + itemGap)), margin, maxLeft);
+        }
+        if (layoutPattern === "same-size-vertical") {
+          const side = Math.floor(index / 3) % 2 === 0 ? 0.22 : 0.62;
+          return clamp(Math.round(viewportWidth * side), margin, maxLeft);
+        }
+        if (layoutPattern === "wide-pair") {
+          const side = index % 2 === 0 ? 0.18 : 0.62;
+          return clamp(Math.round(viewportWidth * side), margin, maxLeft);
+        }
+        if (layoutPattern === "big-left-right") {
+          const side = index % 2 === 0 ? 0.08 : 0.58;
+          return clamp(Math.round(viewportWidth * side), margin, maxLeft);
+        }
+        if (layoutPattern === "center-max-triplet") {
+          const role = index % 3;
+          const itemGap = 34;
+          const totalWidth = itemWidth * 3 + itemGap * 2;
+          const start = (viewportWidth - totalWidth) / 2;
+          return clamp(Math.round(start + role * (itemWidth + itemGap)), margin, maxLeft);
+        }
+        if (layoutPattern === "matrix-9") {
+          const column = index % 9;
+          const gridGap = 28;
+          const totalWidth = itemWidth * 9 + gridGap * 8;
+          const start = (viewportWidth - totalWidth) / 2;
+          return clamp(Math.round(start + column * (itemWidth + gridGap)), margin, maxLeft);
+        }
+        if (layoutPattern === "single-row") {
+          const rowCount = 5 + (Math.floor(seed / 5000) % 4);
+          const role = index % rowCount;
+          const itemGap = 36;
+          const totalWidth = itemWidth * rowCount + itemGap * (rowCount - 1);
+          const start = (viewportWidth - totalWidth) / 2;
+          return clamp(Math.round(start + role * (itemWidth + itemGap)), margin, maxLeft);
+        }
+        const offGridRoll = ((Math.floor(seed / 1000)) % 1000) / 1000;
+        return Math.round(margin + offGridRoll * (maxLeft - margin));
+      }
+
+      function getFlowFallbackLeft({ attemptSeed, viewportWidth, itemWidth, maxLeft, layoutPattern }) {
+        if (layoutPattern === "grid-hang") {
+          const gridColumns = [0.08, 0.28, 0.48, 0.68, 0.84];
+          const column = gridColumns[attemptSeed % gridColumns.length];
+          return clamp(Math.round(viewportWidth * column - itemWidth / 2), 48, maxLeft);
+        }
+        return Math.round(48 + ((attemptSeed % 1000) / 1000) * (maxLeft - 48));
+      }
+
+      function getFlowBandOffset({ index, seed, itemHeight, layoutPattern }) {
+        const jitter = ((Math.floor(seed / 1000000) % 91) - 45);
+        if (layoutPattern === "grid-hang") {
+          return (index % 2 === 0 ? 0 : Math.round(itemHeight * 0.22)) + jitter;
+        }
+        if (layoutPattern === "constellation") {
+          return Math.round((index % 5) * itemHeight * 0.12) + jitter;
+        }
+        if (layoutPattern === "big-with-small-row") {
+          const role = index % 4;
+          return role === 0 ? jitter : Math.round(itemHeight * 0.28) + jitter;
+        }
+        if (layoutPattern === "center-medium-row") {
+          const rowCount = 3 + (Math.floor(seed / 2000) % 2);
+          return Math.round((index % rowCount) * 12) + jitter * 0.35;
+        }
+        if (layoutPattern === "same-size-horizontal") {
+          const groupCount = 2 + (Math.floor(seed / 3000) % 2);
+          return Math.round((index % groupCount) * 8) + jitter * 0.2;
+        }
+        if (layoutPattern === "same-size-vertical") {
+          const groupCount = 2 + (Math.floor(seed / 3000) % 2);
+          return Math.round((index % groupCount) * (itemHeight + 24)) + jitter * 0.2;
+        }
+        if (layoutPattern === "anchor-small") {
+          return index % 5 === 0 ? jitter : Math.round(itemHeight * 0.34) + jitter;
+        }
+        if (layoutPattern === "wide-pair") {
+          return index % 2 === 0 ? jitter : Math.round(itemHeight * 0.4) + jitter;
+        }
+        if (layoutPattern === "big-left-right") {
+          return index % 2 === 0 ? jitter : Math.round(itemHeight * 0.16) + jitter;
+        }
+        if (layoutPattern === "center-max-triplet") {
+          return Math.round((index % 3) * 10) + jitter * 0.25;
+        }
+        if (layoutPattern === "matrix-9") {
+          const row = Math.floor(index / 9);
+          return row * (itemHeight + 28) + jitter * 0.08;
+        }
+        if (layoutPattern === "single-row") {
+          return Math.round((index % 3) * 8) + jitter * 0.2;
+        }
+        return jitter;
+      }
+
+      function getFlowStep({ index, seed, itemHeight, layoutPattern }) {
+        if (layoutPattern === "constellation") {
+          return Math.round(itemHeight * 0.42) + ((Math.floor(seed / 1089000)) % 80);
+        }
+        if (layoutPattern === "big-with-small-row") {
+          return index % 4 === 3
+            ? Math.round(itemHeight * 0.72) + ((Math.floor(seed / 1089000)) % 100)
+            : Math.round(itemHeight * 0.18);
+        }
+        if (layoutPattern === "center-medium-row") {
+          const rowCount = 3 + (Math.floor(seed / 2000) % 2);
+          return index % rowCount === rowCount - 1
+            ? Math.round(itemHeight * 0.64) + ((Math.floor(seed / 1089000)) % 110)
+            : Math.round(itemHeight * 0.12);
+        }
+        if (layoutPattern === "same-size-horizontal") {
+          const groupCount = 2 + (Math.floor(seed / 3000) % 2);
+          return index % groupCount === groupCount - 1
+            ? Math.round(itemHeight * 0.72) + ((Math.floor(seed / 1089000)) % 100)
+            : Math.round(itemHeight * 0.08);
+        }
+        if (layoutPattern === "same-size-vertical") {
+          const groupCount = 2 + (Math.floor(seed / 3000) % 2);
+          return index % groupCount === groupCount - 1
+            ? Math.round(itemHeight * 0.48) + ((Math.floor(seed / 1089000)) % 90)
+            : Math.round(itemHeight * 0.04);
+        }
+        if (layoutPattern === "anchor-small") {
+          return Math.round(itemHeight * 0.58) + ((Math.floor(seed / 1089000)) % 120);
+        }
+        if (layoutPattern === "wide-pair") {
+          return Math.round(itemHeight * 0.5) + ((Math.floor(seed / 1089000)) % 140);
+        }
+        if (layoutPattern === "big-left-right") {
+          return index % 2 === 1
+            ? Math.round(itemHeight * 0.78) + ((Math.floor(seed / 1089000)) % 120)
+            : Math.round(itemHeight * 0.18);
+        }
+        if (layoutPattern === "center-max-triplet") {
+          return index % 3 === 2
+            ? Math.round(itemHeight * 0.82) + ((Math.floor(seed / 1089000)) % 120)
+            : Math.round(itemHeight * 0.1);
+        }
+        if (layoutPattern === "matrix-9") {
+          return index % 9 === 8
+            ? Math.round(itemHeight * 0.72)
+            : Math.round(itemHeight * 0.04);
+        }
+        if (layoutPattern === "single-row") {
+          const rowCount = 5 + (Math.floor(seed / 5000) % 4);
+          return index % rowCount === rowCount - 1
+            ? Math.round(itemHeight * 0.92) + ((Math.floor(seed / 1089000)) % 100)
+            : Math.round(itemHeight * 0.06);
+        }
+        return Math.round(itemHeight * 0.52) + ((Math.floor(seed / 1089000)) % 130);
+      }
+
+      function relayoutFlowItems() {
+        flowNextY = 0;
+        flowPlacedRects.length = 0;
+        flowSectionLayouts.clear();
+        infiniteFeedEl.style.minHeight = "";
+        Array.from(infiniteFeedEl.querySelectorAll(".infinite-feed-item")).forEach((element, index) => {
+          applyFlowPlacement(
+            element,
+            {
+              imageUrl: element.dataset.imageUrl || String(index),
+              __repeatKind: element.dataset.repeatKind || "",
+              __repeatScale: Number(element.dataset.repeatScale || 1),
+              __responseSide: element.dataset.responseSide || "",
+            },
+            index,
+          );
+        });
+      }
+
+      async function appendFlowItems(count) {
+        if (isFlowAppending || displayMode !== "flow") {
+          return;
+        }
+        isFlowAppending = true;
+        updateFlowLoader("Adding images...");
+        try {
+          let appended = 0;
+          const targetAppendCount = getFlowAppendCount(count);
+          while (appended < targetAppendCount) {
+            const item = takeNextFlowItem();
+            if (!item) {
+              ensureCacheStock();
+              break;
+            }
+            infiniteFeedEl.appendChild(buildFlowItemElement(item));
+            appended += 1;
+          }
+          refreshCacheUi();
+          ensureCacheStock();
+        } finally {
+          isFlowAppending = false;
+          updateFlowLoader();
+        }
+      }
+
+      function getFlowAppendCount(requestedCount) {
+        if (isMobileViewport()) {
+          return requestedCount;
+        }
+        const placedCount = infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
+        const sectionInfo = getFlowSectionInfo(placedCount);
+        const itemsToSectionEnd = sectionInfo.itemIndex === 0
+          ? sectionInfo.itemCount
+          : sectionInfo.itemCount - sectionInfo.itemIndex;
+        return Math.max(requestedCount, itemsToSectionEnd);
+      }
+
+      function getScrollRemainingPx() {
+        const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
+        const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+        const docHeight = Math.max(
+          document.body.scrollHeight,
+          document.documentElement.scrollHeight,
+        );
+        return docHeight - (scrollTop + viewportHeight);
+      }
+
+      function maintainInfiniteFeed() {
+        if (displayMode !== "flow") {
+          return;
+        }
+        let guard = 0;
+        while (getScrollRemainingPx() < FLOW_AHEAD_PX && guard < 5) {
+          appendFlowItems(FLOW_APPEND_BATCH);
+          guard += 1;
+          if (cacheImageItems.length === 0) {
+            break;
+          }
+        }
+      }
+
+      function resetFlowFeed() {
+        infiniteFeedEl.textContent = "";
+        infiniteFeedEl.style.minHeight = "";
+        flowNextY = 0;
+        flowPlacedRects.length = 0;
+        flowSectionLayouts.clear();
+        flowSeenImageUrls.clear();
+        flowHistoryItems.length = 0;
+        flowMotifItems.length = 0;
+        flowMotifs.length = 0;
+        flowMotifDraft.length = 0;
+        flowPlacedItems.length = 0;
+        flowBaselineItem = null;
+      }
+
+      function startFlowMode() {
+        if (!infiniteFeedEl.children.length) {
+          appendFlowItems(FLOW_INITIAL_COUNT);
+        }
+        maintainInfiniteFeed();
+      }
+
+      async function startWallMode() {
+        fillAspectQueue();
+        if (rec1El.dataset.ready === "true") {
+          return;
+        }
+        await placeRec1();
+        let anchorRec = rec1El;
+        for (let index = 1; index < INITIAL_PLACE_COUNT; index += 1) {
+          await createNextRec(anchorRec);
+          const recs = wallEl.querySelectorAll(".bounding-box");
+          anchorRec = recs[recs.length - 1] || anchorRec;
+        }
       }
 
 
@@ -328,10 +1168,12 @@
       }
 
       function queueAspectPrefetch() {
-        const imageItem = pickRandomImage();
+        const candidates = cacheImageItems.filter((item) => item?.imageUrl && !queuedAspectUrls.has(item.imageUrl));
+        const imageItem = getRandomFrom(candidates.length ? candidates : cacheImageItems);
         if (!imageItem) {
           return Promise.resolve(null);
         }
+        queuedAspectUrls.add(imageItem.imageUrl);
         const imageUrl = buildImageProxyUrl(imageItem.imageUrl);
         const promise = new Promise((resolve) => {
           const img = new Image();
@@ -349,6 +1191,11 @@
         }).catch(() => null);
 
         promise.then((result) => {
+          queuedAspectUrls.delete(imageItem.imageUrl);
+          const queueIndex = aspectQueue.indexOf(promise);
+          if (queueIndex >= 0) {
+            aspectQueue.splice(queueIndex, 1);
+          }
           if (result) {
             readyAspects.push(result);
           }
@@ -357,7 +1204,10 @@
       }
 
       function fillAspectQueue() {
-        while (aspectQueue.length < PREFETCH_COUNT) {
+        if (displayMode !== "wall") {
+          return;
+        }
+        while (aspectQueue.length + readyAspects.length < MAX_ASPECT_PREFETCH) {
           aspectQueue.push(queueAspectPrefetch());
         }
       }
@@ -368,6 +1218,9 @@
           return readyAspects.shift();
         }
         const nextPromise = aspectQueue.shift();
+        if (!nextPromise) {
+          return null;
+        }
         const result = await nextPromise;
         fillAspectQueue();
         return result;
@@ -510,6 +1363,7 @@
         recEl.dataset.imageUrl = sourceUrl || "";
         recEl.dataset.pageUrl = sourcePageUrl || "";
         recEl.dataset.ready = "true";
+        refreshLocalStats();
       }
 
       async function placeRec1() {
@@ -526,6 +1380,7 @@
         recCount = 1;
 
         await placeRecInFrame(innerFrame, rec1El, "1", 24);
+        refreshLocalStats();
       }
 
       async function createNextRec(fromRecEl) {
@@ -547,6 +1402,10 @@
 
           const picked = pickSizeOffset();
           await placeRecInFrame(largeVoid, nextRecEl, String(nextIndex), picked.offset);
+          if (nextRecEl.dataset.ready !== "true") {
+            nextRecEl.remove();
+            return;
+          }
           recCount = nextIndex;
 
           if (removeUnderMode) {
@@ -568,6 +1427,7 @@
           nextRecEl.addEventListener("contextmenu", (event) => {
             openRecPageOnRightClick(event, nextRecEl);
           });
+          refreshLocalStats();
         } finally {
           isPlacing = false;
         }
@@ -603,10 +1463,14 @@
         }));
         refreshCacheUi();
         aspectQueue.length = 0;
+        queuedAspectUrls.clear();
         fillAspectQueue();
       }
 
       async function handleRecClick(recEl) {
+        if (displayMode !== "wall") {
+          return;
+        }
         consumeClickedImage(recEl);
         await createNextRec(recEl);
         ensureCacheStock();
@@ -628,64 +1492,87 @@
         openRecPageOnRightClick(event, rec1El);
       });
 
-      rerollButton.addEventListener("click", (event) => {
-        event.preventDefault();
-        placeRec1();
+      window.addEventListener("scroll", () => {
+        maintainInfiniteFeed();
+      }, { passive: true });
+
+      window.addEventListener("resize", () => {
+        if (displayMode === "flow") {
+          relayoutFlowItems();
+        }
+        maintainInfiniteFeed();
       });
 
       async function loadImages() {
-        const maxPages = maxPagesInput.value;
+        const targetCount = getCacheTarget();
+        const initialCount = Math.min(INITIAL_PRODUCT_COUNT, targetCount);
+        let loadErrorMessage = "";
 
         try {
           isLoadingImages = true;
+          setBusy(true);
+          saveLocalSettings();
+          statusEl.dataset.state = "";
           aspectQueue.length = 0;
           readyAspects.length = 0;
+          queuedAspectUrls.clear();
           cacheImageItems = [];
+          resetFlowFeed();
           rec1El.dataset.ready = "false";
           lastUrlCount = 0;
           lastImageCount = 0;
           blockedImageUrls.clear();
           blockedPageUrls.clear();
           statusEl.textContent = "Loading images...";
+          updateFlowLoader("Loading images...");
           crawlStateEl.textContent = "Crawl state: picking random categories...";
           advancedResultEl.textContent = "Result: loading...";
           cachedPageUrlsEl.textContent = "Cached Page URLs: loading...";
           cachedImageUrlsEl.textContent = "Cached Image URLs: loading...";
-          const query = buildFetchQuery(maxPages);
+          const query = buildFetchQuery(initialCount);
           const data = await fetchJson(`/api/monotaro-random-products?${query.toString()}`);
           lastUrlCount = Number(data.url_count || 0);
           lastImageCount = Number(data.image_count || 0);
           const initialItems = extractUniqueImageItemsFromData(data);
-          mergeIntoCache(initialItems, PREFETCH_COUNT);
-          await refillCacheToTarget(PREFETCH_COUNT);
-          fillAspectQueue();
+          mergeIntoCache(initialItems, targetCount);
           refreshCacheUi();
-          await placeRec1();
-          await createNextRec(rec1El);
-          const rec2 = wallEl.querySelectorAll(".bounding-box")[1];
-          if (rec2) {
-            await createNextRec(rec2);
+          if (displayMode === "flow") {
+            startFlowMode();
+          } else {
+            fillAspectQueue();
+            await placeRec1();
+            let anchorRec = rec1El;
+            for (let index = 1; index < INITIAL_PLACE_COUNT; index += 1) {
+              await createNextRec(anchorRec);
+              const recs = wallEl.querySelectorAll(".bounding-box");
+              anchorRec = recs[recs.length - 1] || anchorRec;
+            }
           }
+          ensureCacheStock();
         } catch (error) {
           statusEl.textContent = error.message || "Failed to load images.";
+          loadErrorMessage = statusEl.textContent;
+          statusEl.dataset.state = "error";
+          updateFlowLoader(statusEl.textContent);
           crawlStateEl.textContent = "Crawl state: idle";
           advancedResultEl.textContent = `Result: ${statusEl.textContent}`;
           cachedPageUrlsEl.textContent = "Cached Page URLs: (none)";
           cachedImageUrlsEl.textContent = "Cached Image URLs: (none)";
         } finally {
           isLoadingImages = false;
+          setBusy(false);
+          refreshLocalStats();
+          updateFlowLoader(loadErrorMessage || undefined);
         }
       }
 
-      form.addEventListener("submit", (event) => {
-        event.preventDefault();
-        loadImages();
-      });
-
       window.addEventListener("load", () => {
+        loadLocalSettings();
         if (categoryDataInput) {
           categoryDataInput.title = "Copied from monotaro-category-scraper/data/all-categories.deep.categories.csv";
         }
+        refreshLocalStats();
+        updateFlowLoader("Loading images...");
         startCacheMonitor();
         loadImages();
       });

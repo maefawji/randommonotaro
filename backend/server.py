@@ -10,7 +10,8 @@ import ssl
 import socket
 import sys
 import time
-from collections import deque
+from collections import OrderedDict, deque
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from bs4 import BeautifulSoup, Tag
 from html.parser import HTMLParser
 from http import HTTPStatus
@@ -35,6 +36,8 @@ HOST = os.environ.get("HOST", "0.0.0.0" if IS_RENDER else "127.0.0.1")
 PORT = int(os.environ.get("PORT", "8011"))
 DEFAULT_TIMEOUT = 20
 MONOTARO_LIST_META_TTL_SECONDS = 900
+MONOTARO_RANDOM_WORKERS = int(os.environ.get("MONOTARO_RANDOM_WORKERS", "4"))
+IMAGE_CACHE_MAX_ITEMS = int(os.environ.get("IMAGE_CACHE_MAX_ITEMS", "256"))
 MAX_CRAWL_BUDGET = 1200
 DEFAULT_INDEX_CRAWL_BUDGET = 8000
 MAX_INDEX_CRAWL_BUDGET = 50000
@@ -46,6 +49,7 @@ INDEX_FILE_PATH = PROJECT_ROOT / "backend" / "data" / "url_index.json"
 MONOTARO_LIST_META_CACHE: dict[str, tuple[float, int, int]] = {}
 MONOTARO_CATEGORY_INDEX_PATH = PROJECT_ROOT / "backend" / "data" / "monotaro_categories.deep.csv"
 MONOTARO_CATEGORY_POOL_CACHE: tuple[float, list[dict[str, str | int]]] | None = None
+IMAGE_BYTES_CACHE: OrderedDict[str, tuple[str, bytes]] = OrderedDict()
 
 
 def build_ssl_context() -> ssl.SSLContext:
@@ -178,7 +182,7 @@ class AppHandler(SimpleHTTPRequestHandler):
       self.send_response(HTTPStatus.OK)
       self.send_header("Content-Type", content_type)
       self.send_header("Content-Length", str(len(body)))
-      self.send_header("Cache-Control", "no-store")
+      self.send_header("Cache-Control", "private, max-age=86400")
       self.end_headers()
       self.wfile.write(body)
     except Exception as exc:
@@ -568,24 +572,46 @@ def collect_monotaro_random_products_from_categories(
   seen_product_urls: set[str] = set()
   attempts = 0
   max_attempts = max(count * 12, 24)
+  worker_count = max(1, min(MONOTARO_RANDOM_WORKERS, count, 16))
 
-  while len(result_pages) < count and attempts < max_attempts:
-    attempts += 1
+  def pick_one() -> dict | None:
     category = RNG.choice(categories)
     page_payload = pick_random_monotaro_product_from_category(category=category, cookie=cookie)
-    if page_payload is None:
-      continue
-    if page_payload["url"] in seen_product_urls:
-      continue
-    seen_product_urls.add(str(page_payload["url"]))
-    result_pages.append(page_payload)
     if delay_ms > 0:
       time.sleep(delay_ms / 1000.0)
+    return page_payload
+
+  executor = ThreadPoolExecutor(max_workers=worker_count)
+  pending = set()
+  try:
+    while len(result_pages) < count and (attempts < max_attempts or pending):
+      while len(pending) < worker_count and attempts < max_attempts:
+        pending.add(executor.submit(pick_one))
+        attempts += 1
+
+      if not pending:
+        break
+
+      for future in as_completed(pending):
+        pending.remove(future)
+        try:
+          page_payload = future.result()
+        except Exception:
+          page_payload = None
+        if page_payload is not None and page_payload["url"] not in seen_product_urls:
+          seen_product_urls.add(str(page_payload["url"]))
+          result_pages.append(page_payload)
+        break
+  finally:
+    for future in pending:
+      future.cancel()
+    executor.shutdown(wait=False, cancel_futures=True)
 
   return {
       "mode": "monotaro-random-products",
       "category_source_file": str(MONOTARO_CATEGORY_INDEX_PATH),
       "category_pool_count": len(categories),
+      "worker_count": worker_count,
       "attempt_count": attempts,
       "url_count": len(result_pages),
       "page_count": len(result_pages),
@@ -882,6 +908,12 @@ def fetch_image_bytes(image_url: str, cookie: str) -> tuple[str, bytes]:
   if parsed.scheme not in {"http", "https"}:
     raise ValueError("Invalid image URL.")
 
+  cache_key = f"{image_url}|{cookie or '__no_cookie__'}"
+  cached = IMAGE_BYTES_CACHE.get(cache_key)
+  if cached is not None:
+    IMAGE_BYTES_CACHE.move_to_end(cache_key)
+    return cached
+
   request = Request(
       image_url,
       headers=build_headers(image_url, cookie, accept="image/avif,image/webp,image/apng,image/*,*/*;q=0.8"),
@@ -890,7 +922,12 @@ def fetch_image_bytes(image_url: str, cookie: str) -> tuple[str, bytes]:
   try:
     with urlopen(request, timeout=DEFAULT_TIMEOUT, context=URLLIB_SSL_CONTEXT) as response:
       content_type = response.headers.get("Content-Type", "application/octet-stream")
-      return content_type, response.read()
+      body = response.read()
+      IMAGE_BYTES_CACHE[cache_key] = (content_type, body)
+      IMAGE_BYTES_CACHE.move_to_end(cache_key)
+      while len(IMAGE_BYTES_CACHE) > IMAGE_CACHE_MAX_ITEMS:
+        IMAGE_BYTES_CACHE.popitem(last=False)
+      return content_type, body
   except HTTPError as exc:
     raise ValueError(f"Failed to fetch image ({exc.code}).") from exc
   except URLError as exc:
