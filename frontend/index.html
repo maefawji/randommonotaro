@@ -297,6 +297,8 @@
         flowLoaderTextEl.textContent = message || (
           isActive
             ? "Loading images..."
+            : placedCount === 0
+            ? "Loading images..."
             : `${placedCount} images loaded`
         );
       }
@@ -443,7 +445,7 @@
         infiniteFeedEl.style.minHeight = `${Math.ceil(safeMinHeight)}px`;
       }
 
-      function setDisplayMode(nextMode, shouldStart = true) {
+      async function setDisplayMode(nextMode, shouldStart = true) {
         displayMode = nextMode === "wall" ? "wall" : "flow";
         document.body.dataset.displayMode = displayMode;
         wallEl.hidden = displayMode !== "wall";
@@ -454,9 +456,9 @@
         }
         if (displayMode === "wall") {
           stopAutoScroll();
-          startWallMode();
+          await startWallMode();
         } else {
-          startFlowMode();
+          await startFlowMode();
           updateAutoScrollMode();
         }
         refreshLocalStats();
@@ -1932,14 +1934,14 @@
         flowLastRepeatAt.clear();
       }
 
-      function startFlowMode() {
+      async function startFlowMode() {
         if (!infiniteFeedEl.children.length && cacheImageItems.length < FLOW_FIRST_DISPLAY_COUNT) {
           ensureCacheStock();
           updateFlowLoader(`Waiting for first ${FLOW_FIRST_DISPLAY_COUNT} images ${cacheImageItems.length}/${FLOW_FIRST_DISPLAY_COUNT}`, 74);
           return;
         }
         if (!infiniteFeedEl.children.length) {
-          appendFlowItems(FLOW_FIRST_DISPLAY_COUNT, { exact: true });
+          await appendFlowItems(FLOW_FIRST_DISPLAY_COUNT, { exact: true });
           window.requestAnimationFrame(() => maintainInfiniteFeed());
           return;
         }
@@ -2419,7 +2421,7 @@
           refreshCacheUi();
           if (displayMode === "flow") {
             updateFlowLoader("Composing first layout...", 82);
-            startFlowMode();
+            await startFlowMode();
           } else {
             fillAspectQueue();
             updateFlowLoader("Placing first image...", 82);
@@ -2452,7 +2454,7 @@
         }
       }
 
-      window.addEventListener("load", () => {
+      window.addEventListener("load", async () => {
         loadLocalSettings();
         setDisplayMode(wallModeInput.checked ? "wall" : "flow", false);
         updateSettingsStates();
@@ -2462,8 +2464,8 @@
         }
         refreshLocalStats();
         updateFlowLoader("Loading images...");
+        await loadImages();
         startCacheMonitor();
-        loadImages();
       });
     </script>
   </body>

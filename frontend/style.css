@@ -662,6 +662,44 @@ body[data-layout-debug="true"] .infinite-feed-group {
 }
 
 @media (max-width: 760px) {
+  #settings-dot.settings-dot,
+  body[data-page-key="web"] .settings-dot {
+    top: 14px !important;
+    left: 14px !important;
+    width: 30px !important;
+    min-width: 30px !important;
+    max-width: 30px !important;
+    height: 30px !important;
+    min-height: 30px !important;
+    max-height: 30px !important;
+  }
+
+  .settings-panel {
+    top: 54px;
+    left: 14px;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    gap: 10px;
+    max-width: calc(100vw - 28px);
+    transform: translateY(-10px);
+  }
+
+  body[data-settings-open="true"] .settings-panel {
+    transform: translateY(0);
+  }
+
+  .settings-option {
+    min-height: 24px;
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  .settings-label,
+  .settings-state {
+    font-size: 12px;
+  }
+
   .infinite-feed {
     width: min(78vw, 520px);
     min-height: 0 !important;
