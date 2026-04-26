@@ -897,7 +897,10 @@
           link.dataset.group = "true";
           link.dataset.groupLayout = item.__groupLayout || "row";
           link.dataset.groupCount = String(item.__groupItems?.length || 0);
+          const groupGrid = getFlowGroupGrid(item.__groupLayout || "row", item.__groupItems?.length || 1);
           link.style.setProperty("--flow-group-count", String(item.__groupItems?.length || 1));
+          link.style.setProperty("--flow-group-columns", String(groupGrid.columns));
+          link.style.setProperty("--flow-group-rows", String(groupGrid.rows));
           for (const groupItem of item.__groupItems || []) {
             const cell = document.createElement("a");
             cell.className = "flow-group-cell";
@@ -932,6 +935,17 @@
         return link;
       }
 
+      function getFlowGroupGrid(layout, count) {
+        const safeCount = Math.max(1, Number(count || 1));
+        if (layout === "column") {
+          return { columns: 1, rows: safeCount };
+        }
+        if (layout === "stair-down" || layout === "stair-up") {
+          return { columns: safeCount, rows: safeCount };
+        }
+        return { columns: safeCount, rows: 1 };
+      }
+
       function applyFlowPlacement(element, item, index) {
         if (isMobileViewport()) {
           element.style.cssText = "";
@@ -953,18 +967,28 @@
         if (!useGridSection && sectionItemIndex === 0) {
           openFlowSectionSpace(sectionIndex);
         }
-        const itemWidth = getFlowItemWidth({
-          index: sectionItemIndex,
-          globalIndex: index,
-          seed,
-          viewportWidth,
+        const strictGridCell = getStrictSectionGridCell({
           layoutPattern,
-          sizePattern,
-          unitKind: item.__isGroup ? "group" : "single",
-          groupLayout: item.__groupLayout || "",
-          groupCount: item.__groupCount || 1,
+          sectionLayout,
+          sectionInfo,
+          viewportWidth,
         });
-        const itemHeight = Math.round(itemWidth * getFlowUnitHeightRatio(item));
+        const itemWidth = strictGridCell
+          ? strictGridCell.itemSize
+          : getFlowItemWidth({
+              index: sectionItemIndex,
+              globalIndex: index,
+              seed,
+              viewportWidth,
+              layoutPattern,
+              sizePattern,
+              unitKind: item.__isGroup ? "group" : "single",
+              groupLayout: item.__groupLayout || "",
+              groupCount: item.__groupCount || 1,
+            });
+        const itemHeight = strictGridCell
+          ? strictGridCell.itemSize
+          : Math.round(itemWidth * getFlowUnitHeightRatio(item));
         const maxLeft = Math.max(32, viewportWidth - itemWidth - 56);
         const preferredLeft = getFlowPreferredLeft({
           index: sectionItemIndex,
@@ -976,8 +1000,8 @@
           sectionIndex,
         });
         const bandOffset = getFlowBandOffset({ index: sectionItemIndex, seed, itemHeight, layoutPattern });
-        let left = preferredLeft;
-        let top = Math.max(24, (sectionLayout ? sectionLayout.top : flowNextY) + bandOffset);
+        let left = strictGridCell ? strictGridCell.left : preferredLeft;
+        let top = strictGridCell ? strictGridCell.top : Math.max(24, (sectionLayout ? sectionLayout.top : flowNextY) + bandOffset);
         const step = getFlowStep({ index: sectionItemIndex, seed, itemHeight, layoutPattern });
         const gap = item.__isGroup
           ? 44
@@ -986,11 +1010,14 @@
             : 36;
         let candidate = null;
 
-        for (let attempt = 0; attempt < 28; attempt += 1) {
+        for (let attempt = 0; attempt < (strictGridCell ? 1 : 28); attempt += 1) {
           const attemptSeed = hashString(`${seed}:${attempt}`);
-          left = attempt === 0
+          left = strictGridCell
+            ? strictGridCell.left
+            : attempt === 0
             ? preferredLeft
             : getFlowFallbackLeft({ attemptSeed, viewportWidth, itemWidth, maxLeft, layoutPattern });
+          top = strictGridCell ? strictGridCell.top : top;
           candidate = { x: left - gap, y: top - gap, width: itemWidth + gap * 2, height: itemHeight + gap * 2 };
           const hasOverlap = flowPlacedRects.some((rect) => rectanglesOverlap(candidate, rect));
           if (!hasOverlap) {
@@ -1003,6 +1030,7 @@
 
         let settleAttempt = 0;
         while (
+          !strictGridCell &&
           candidate &&
           flowPlacedRects.some((rect) => rectanglesOverlap(candidate, rect)) &&
           settleAttempt < 40
@@ -1038,7 +1066,12 @@
         }
         if (sectionLayout) {
           sectionLayout.bottom = Math.max(sectionLayout.bottom, top + itemHeight);
-          updateFlowSectionGuide({ sectionIndex, layoutPattern, top: sectionLayout.top, bottom: sectionLayout.bottom });
+          updateFlowSectionGuide({
+            sectionIndex,
+            layoutPattern,
+            top: sectionLayout.top,
+            bottom: sectionLayout.top + sectionLayout.height,
+          });
           flowNextY = Math.max(flowNextY, sectionLayout.top + sectionLayout.height, sectionLayout.bottom + 80);
         } else {
           updateFlowSectionGuide({ sectionIndex, layoutPattern, top: Math.max(24, flowNextY), bottom: top + itemHeight });
@@ -1049,6 +1082,7 @@
 
       function isFlowGridSection(layoutPattern) {
         return new Set([
+          "big-left-right",
           "big-with-small-row",
           "center-medium-row",
           "same-size-horizontal",
@@ -1092,7 +1126,14 @@
       }
 
       function getFlowSectionItemCount(sectionIndex) {
-        if (getFlowLayoutPattern(sectionIndex) === "big-with-group") {
+        const layoutPattern = getFlowLayoutPattern(sectionIndex);
+        if (layoutPattern === "big-left-right") {
+          return 2;
+        }
+        if (layoutPattern === "single-row") {
+          return getSingleRowColumnCount(sectionIndex);
+        }
+        if (layoutPattern === "big-with-group") {
           return 2;
         }
         const cycle = sectionIndex % 10;
@@ -1160,8 +1201,75 @@
         guide.dataset.bottom = String(nextBottom);
         guide.dataset.layoutPattern = layoutPattern;
         guide.dataset.debugLabel = `Section ${sectionIndex} / ${layoutPattern}`;
+        const grid = getFlowSectionGrid(layoutPattern, sectionIndex);
+        guide.style.setProperty("--flow-section-columns", String(grid.columns));
+        guide.style.setProperty("--flow-section-rows", String(grid.rows));
         guide.style.top = `${nextTop}px`;
         guide.style.height = `${Math.max(80, nextBottom - nextTop)}px`;
+      }
+
+      function getFlowSectionGrid(layoutPattern, sectionIndex = 0) {
+        if (layoutPattern === "big-left-right") {
+          return { columns: 2, rows: 1 };
+        }
+        if (layoutPattern === "matrix-9") {
+          return { columns: 9, rows: 1 };
+        }
+        if (layoutPattern === "single-row") {
+          return { columns: getSingleRowColumnCount(sectionIndex), rows: 1 };
+        }
+        if (layoutPattern === "center-max-triplet") {
+          return { columns: 3, rows: 1 };
+        }
+        if (layoutPattern === "big-with-group" || layoutPattern === "wide-pair") {
+          return { columns: 2, rows: 1 };
+        }
+        if (layoutPattern === "big-with-small-row") {
+          return { columns: 4, rows: 1 };
+        }
+        if (layoutPattern === "center-medium-row" || layoutPattern === "same-size-horizontal") {
+          return { columns: 4, rows: 1 };
+        }
+        if (layoutPattern === "same-size-vertical") {
+          return { columns: 2, rows: 3 };
+        }
+        if (layoutPattern === "grid-hang") {
+          return { columns: 5, rows: 2 };
+        }
+        if (layoutPattern === "constellation") {
+          return { columns: 5, rows: 3 };
+        }
+        return { columns: 6, rows: 3 };
+      }
+
+      function getStrictSectionGridCell({ layoutPattern, sectionLayout, sectionInfo, viewportWidth }) {
+        if (!sectionLayout || (layoutPattern !== "big-left-right" && layoutPattern !== "single-row")) {
+          return null;
+        }
+        const grid = getFlowSectionGrid(layoutPattern, sectionInfo.index);
+        const outerMargin = layoutPattern === "single-row" ? 28 : 32;
+        const gutter = layoutPattern === "single-row" ? 20 : 28;
+        const availableWidth = Math.max(320, viewportWidth - outerMargin * 2 - gutter * (grid.columns - 1));
+        const availableHeight = Math.max(240, sectionLayout.height - gutter * (grid.rows - 1));
+        const cellSize = Math.floor(Math.min(availableWidth / grid.columns, availableHeight / grid.rows));
+        const gridWidth = cellSize * grid.columns + gutter * (grid.columns - 1);
+        const gridHeight = cellSize * grid.rows + gutter * (grid.rows - 1);
+        const gridLeft = Math.round((viewportWidth - gridWidth) / 2);
+        const gridTop = Math.round(sectionLayout.top + Math.max(0, (sectionLayout.height - gridHeight) / 2));
+        const column = sectionInfo.itemIndex % grid.columns;
+        const row = Math.floor(sectionInfo.itemIndex / grid.columns);
+        const inset = layoutPattern === "single-row" ? 6 : 8;
+        return {
+          left: gridLeft + column * (cellSize + gutter) + inset,
+          top: gridTop + row * (cellSize + gutter) + inset,
+          itemSize: Math.max(80, cellSize - inset * 2),
+          gridTop,
+          gridHeight,
+        };
+      }
+
+      function getSingleRowColumnCount(sectionIndex) {
+        return 5 + (hashString(`single-row-columns:${sectionIndex}`) % 4);
       }
 
       function clearFlowSectionGuides() {
@@ -1177,7 +1285,13 @@
         if (layoutPattern === "big-with-group") {
           return Math.round(clamp(viewportWidth * 0.52 + (seed % 180), 680, 1080));
         }
-        if (layoutPattern === "center-max-triplet" || layoutPattern === "big-left-right") {
+        if (layoutPattern === "big-left-right") {
+          return Math.round(clamp(viewportWidth * 0.48 + (seed % 100), 560, 920));
+        }
+        if (layoutPattern === "single-row") {
+          return Math.round(clamp(viewportWidth * 0.26 + (seed % 80), 280, 460));
+        }
+        if (layoutPattern === "center-max-triplet") {
           return Math.round(clamp(viewportWidth * 0.46 + (seed % 180), 620, 960));
         }
         if (layoutPattern === "same-size-vertical") {
@@ -1316,8 +1430,10 @@
           return clamp(Math.round(viewportWidth * side), margin, maxLeft);
         }
         if (layoutPattern === "big-left-right") {
-          const side = index % 2 === 0 ? 0.08 : 0.58;
-          return clamp(Math.round(viewportWidth * side), margin, maxLeft);
+          const itemGap = 72;
+          const totalWidth = itemWidth * 2 + itemGap;
+          const start = (viewportWidth - totalWidth) / 2;
+          return clamp(Math.round(start + (index % 2) * (itemWidth + itemGap)), margin, maxLeft);
         }
         if (layoutPattern === "center-max-triplet") {
           const role = index % 3;
@@ -1385,7 +1501,7 @@
           return index % 2 === 0 ? jitter : Math.round(itemHeight * 0.4) + jitter;
         }
         if (layoutPattern === "big-left-right") {
-          return index % 2 === 0 ? jitter : Math.round(itemHeight * 0.16) + jitter;
+          return 0;
         }
         if (layoutPattern === "big-with-group") {
           return index === 0 ? jitter : Math.round(itemHeight * 0.16) + jitter;
@@ -1438,8 +1554,8 @@
         }
         if (layoutPattern === "big-left-right") {
           return index % 2 === 1
-            ? Math.round(itemHeight * 0.78) + ((Math.floor(seed / 1089000)) % 120)
-            : Math.round(itemHeight * 0.18);
+            ? Math.round(itemHeight * 0.9)
+            : 0;
         }
         if (layoutPattern === "big-with-group") {
           return index === 1
@@ -1977,6 +2093,9 @@
       layoutDebugInput.addEventListener("change", () => {
         saveLocalSettings();
         updateLayoutDebugMode();
+        if (displayMode === "flow") {
+          relayoutFlowItems();
+        }
       });
 
       document.addEventListener("keydown", (event) => {

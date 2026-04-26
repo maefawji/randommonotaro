@@ -344,7 +344,7 @@ body[data-loading="true"] .settings-dot {
   width: 100vw;
   pointer-events: none;
   display: none;
-  z-index: 1;
+  z-index: 30;
 }
 
 .flow-section-guide::before {
@@ -359,20 +359,34 @@ body[data-loading="true"] .settings-dot {
   font-size: 10px;
   line-height: 1;
   white-space: nowrap;
+  z-index: 32;
+}
+
+.flow-section-guide::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 31;
+  background-image:
+    radial-gradient(circle at 0 0, rgba(255, 70, 0, 0.72) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 0 0, rgba(255, 70, 0, 0.72) 0 1px, transparent 1.5px);
+  background-size:
+    calc(100% / var(--flow-section-columns, 6)) 8px,
+    8px calc(100% / var(--flow-section-rows, 3));
+  background-repeat: repeat;
 }
 
 body[data-layout-debug="true"] .flow-section-guide {
   display: block;
-  border-top: 1px dashed rgba(255, 151, 0, 0.7);
-  border-bottom: 1px dashed rgba(255, 151, 0, 0.7);
-  background: rgba(255, 191, 0, 0.035);
+  border: 1px dashed rgba(255, 151, 0, 0.9);
+  background-color: rgba(255, 191, 0, 0.06);
 }
 
 body[data-layout-debug="true"] .infinite-feed-item {
   outline: 1px solid rgba(0, 123, 255, 0.65);
   outline-offset: 0;
   overflow: visible;
-  z-index: 2;
+  z-index: 20;
 }
 
 body[data-layout-debug="true"] .infinite-feed-item::before {
@@ -511,17 +525,13 @@ body[data-layout-debug="true"] .flow-group-cell {
   background: rgba(127, 0, 255, 0.035);
 }
 
-body[data-layout-debug="true"] .flow-group-cell::before {
-  content: "cell " attr(style);
-  position: absolute;
-  display: none;
-}
-
 body[data-layout-debug="true"] .infinite-feed-group {
   background-image:
     linear-gradient(rgba(127, 0, 255, 0.22) 1px, transparent 1px),
     linear-gradient(90deg, rgba(127, 0, 255, 0.22) 1px, transparent 1px);
-  background-size: calc(100% / var(--flow-group-count, 2)) calc(100% / var(--flow-group-count, 2));
+  background-size:
+    100% calc(100% / var(--flow-group-rows, 1)),
+    calc(100% / var(--flow-group-columns, 2)) 100%;
 }
 
 .flow-loader {
