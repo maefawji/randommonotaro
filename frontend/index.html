@@ -8,14 +8,21 @@
   </head>
   <body data-page-mode="b" data-page-key="web" data-display-mode="flow">
     <div id="settings-dot" class="settings-dot" role="button" tabindex="0" aria-label="Open settings" aria-expanded="false" aria-controls="settings-panel"></div>
-    <aside id="settings-panel" class="settings-panel" hidden>
+    <aside id="settings-panel" class="settings-panel" aria-hidden="true">
       <label class="settings-option">
         <input id="background-filter-input" type="checkbox" checked />
-        <span>背景のある画像を除外</span>
+        <span class="settings-label">Background Filter</span>
+        <span class="settings-state" data-setting-state-for="background-filter-input">ON</span>
       </label>
       <label class="settings-option">
         <input id="layout-debug-input" type="checkbox" />
-        <span>補助線を表示</span>
+        <span class="settings-label">Layout Guides</span>
+        <span class="settings-state" data-setting-state-for="layout-debug-input">OFF</span>
+      </label>
+      <label class="settings-option">
+        <input id="auto-scroll-input" type="checkbox" checked />
+        <span class="settings-label">Auto Scroll</span>
+        <span class="settings-state" data-setting-state-for="auto-scroll-input">ON</span>
       </label>
     </aside>
 
@@ -80,6 +87,7 @@
       const settingsPanelEl = document.getElementById("settings-panel");
       const backgroundFilterInput = document.getElementById("background-filter-input");
       const layoutDebugInput = document.getElementById("layout-debug-input");
+      const autoScrollInput = document.getElementById("auto-scroll-input");
 
       const API_BASE = "";
       const LOCAL_SETTINGS_KEY = "webpage-viewer-local-settings-v2";
@@ -91,18 +99,24 @@
       let isFlowAppending = false;
       let displayMode = "flow";
       let flowNextY = 0;
+      let autoScrollFrameId = null;
+      let autoScrollLastTime = 0;
+      let autoScrollRemainder = 0;
       let removeUnderMode = true;
       let lastUrlCount = 0;
       let lastImageCount = 0;
       let cacheMonitorId = null;
       const blockedImageUrls = new Set();
       const blockedPageUrls = new Set();
-      const INITIAL_PRODUCT_COUNT = 4;
+      const INITIAL_PRODUCT_COUNT = 12;
       const INITIAL_PLACE_COUNT = 3;
       const MAX_ASPECT_PREFETCH = 8;
-      const FLOW_INITIAL_COUNT = 10;
-      const FLOW_APPEND_BATCH = 6;
-      const FLOW_AHEAD_PX = 2600;
+      const FLOW_INITIAL_COUNT = 24;
+      const FLOW_APPEND_BATCH = 18;
+      const FLOW_AHEAD_PX = 6400;
+      const FLOW_LOADING_BUFFER_PX = 1600;
+      const FLOW_EMERGENCY_AHEAD_PX = 2200;
+      const AUTO_SCROLL_PX_PER_SECOND = 34;
       const MOBILE_BREAKPOINT_PX = 760;
       const FLOW_SECTION_DEFAULT_ITEM_COUNT = 9;
       const FLOW_REPEAT_MEMORY_LIMIT = 42;
@@ -112,8 +126,8 @@
       const FLOW_GROUP_CHANCE = 0.24;
       const BACKGROUND_FRAME_OFFSET_PX = 6;
       const BACKGROUND_FRAME_THICKNESS_PX = 10;
-      const BACKGROUND_DARKNESS_THRESHOLD = 28;
-      const BACKGROUND_FILLED_RATIO_THRESHOLD = 0.18;
+      const BACKGROUND_DARKNESS_THRESHOLD = 12;
+      const BACKGROUND_FILLED_RATIO_THRESHOLD = 0.12;
       const FLOW_LAYOUT_PATTERNS = [
         "grid-hang",
         "off-grid",
@@ -290,6 +304,9 @@
           if (typeof settings.showLayoutDebug === "boolean") {
             layoutDebugInput.checked = settings.showLayoutDebug;
           }
+          if (typeof settings.autoScroll === "boolean") {
+            autoScrollInput.checked = settings.autoScroll;
+          }
         } catch (error) {
           window.localStorage.removeItem(LOCAL_SETTINGS_KEY);
         }
@@ -301,6 +318,7 @@
           delayMs: delayMsInput.value,
           excludeBackgroundImages: backgroundFilterInput.checked,
           showLayoutDebug: layoutDebugInput.checked,
+          autoScroll: autoScrollInput.checked,
         };
         window.localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(settings));
       }
@@ -309,12 +327,63 @@
         document.body.dataset.layoutDebug = layoutDebugInput.checked ? "true" : "false";
       }
 
+      function updateSettingsStates() {
+        document.querySelectorAll("[data-setting-state-for]").forEach((stateEl) => {
+          const inputEl = document.getElementById(stateEl.dataset.settingStateFor);
+          stateEl.textContent = inputEl?.checked ? "ON" : "OFF";
+        });
+      }
+
+      function updateAutoScrollMode() {
+        document.body.dataset.autoScroll = autoScrollInput.checked ? "true" : "false";
+        if (autoScrollInput.checked) {
+          startAutoScroll();
+        } else {
+          stopAutoScroll();
+        }
+      }
+
+      function startAutoScroll() {
+        if (autoScrollFrameId !== null) {
+          return;
+        }
+        autoScrollLastTime = performance.now();
+        autoScrollRemainder = 0;
+        autoScrollFrameId = window.requestAnimationFrame(stepAutoScroll);
+      }
+
+      function stopAutoScroll() {
+        if (autoScrollFrameId !== null) {
+          window.cancelAnimationFrame(autoScrollFrameId);
+          autoScrollFrameId = null;
+        }
+        autoScrollLastTime = 0;
+        autoScrollRemainder = 0;
+      }
+
+      function stepAutoScroll(timestamp) {
+        if (!autoScrollInput.checked) {
+          stopAutoScroll();
+          return;
+        }
+        const deltaSeconds = Math.min(0.08, Math.max(0, (timestamp - autoScrollLastTime) / 1000));
+        autoScrollLastTime = timestamp;
+        if (displayMode === "flow") {
+          maintainInfiniteFeed();
+        }
+        const rawDistance = AUTO_SCROLL_PX_PER_SECOND * deltaSeconds + autoScrollRemainder;
+        const scrollDistance = Math.floor(rawDistance * 100) / 100;
+        autoScrollRemainder = rawDistance - scrollDistance;
+        window.scrollBy({ top: scrollDistance, left: 0, behavior: "auto" });
+        autoScrollFrameId = window.requestAnimationFrame(stepAutoScroll);
+      }
+
       function getCacheTarget() {
         const value = Number(maxPagesInput.value);
         if (!Number.isFinite(value)) {
-          return 48;
+          return 96;
         }
-        return Math.max(1, Math.min(200, Math.floor(value)));
+        return Math.max(48, Math.min(240, Math.floor(value)));
       }
 
       function ensureCacheStock() {
@@ -323,6 +392,28 @@
           return;
         }
         refillCacheToTarget(targetCount);
+      }
+
+      function extendFlowLoadingBuffer() {
+        if (displayMode !== "flow") {
+          return;
+        }
+        if (cacheImageItems.length === 0 && !hasEmergencyFlowPool()) {
+          trimFlowLoadingBuffer();
+          return;
+        }
+        const currentMinHeight = Number.parseFloat(infiniteFeedEl.style.minHeight || "0") || 0;
+        const viewportBottom = (window.scrollY || document.documentElement.scrollTop || 0) + (window.innerHeight || 0);
+        const targetMinHeight = Math.max(currentMinHeight, flowNextY + window.innerHeight + FLOW_LOADING_BUFFER_PX, viewportBottom + FLOW_LOADING_BUFFER_PX);
+        infiniteFeedEl.style.minHeight = `${Math.ceil(targetMinHeight)}px`;
+      }
+
+      function trimFlowLoadingBuffer() {
+        if (displayMode !== "flow") {
+          return;
+        }
+        const safeMinHeight = Math.max(flowNextY + window.innerHeight, window.innerHeight * 1.2);
+        infiniteFeedEl.style.minHeight = `${Math.ceil(safeMinHeight)}px`;
       }
 
       function setDisplayMode(nextMode) {
@@ -624,6 +715,9 @@
           isCacheRefilling = false;
           crawlStateEl.textContent = "Crawl state: idle";
           updateFlowLoader();
+          if (displayMode === "flow") {
+            window.requestAnimationFrame(() => maintainInfiniteFeed());
+          }
         }
       }
 
@@ -660,6 +754,38 @@
         flowSeenImageUrls.add(item.imageUrl);
         rememberFlowItem(item);
         return item;
+      }
+
+      function hasEmergencyFlowPool() {
+        return flowHistoryItems.length >= 3 || flowPlacedItems.length >= 3;
+      }
+
+      function shouldUseEmergencyFlow() {
+        if (!hasEmergencyFlowPool()) {
+          return false;
+        }
+        return cacheImageItems.length === 0 || isCacheRefilling || getScrollRemainingPx() < FLOW_EMERGENCY_AHEAD_PX;
+      }
+
+      function takeEmergencyFlowItem() {
+        if (!shouldUseEmergencyFlow()) {
+          return null;
+        }
+        const nextIndex = infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
+        const historyPool = flowHistoryItems.length >= 3
+          ? flowHistoryItems
+          : flowPlacedItems.map((entry) => entry.item).filter(Boolean);
+        if (!historyPool.length) {
+          return null;
+        }
+        const seed = hashString(`emergency:${nextIndex}:${historyPool.length}`);
+        const item = historyPool[seed % historyPool.length];
+        if (!item?.imageUrl) {
+          return null;
+        }
+        return cloneFlowItem(item, {
+          repeatKind: "emergency",
+        });
       }
 
       function takeNextFlowGroupUnit() {
@@ -1604,18 +1730,28 @@
 
       async function appendFlowItems(count) {
         if (isFlowAppending || displayMode !== "flow") {
+          if (cacheImageItems.length > 0 || hasEmergencyFlowPool()) {
+            extendFlowLoadingBuffer();
+          }
           return;
         }
         isFlowAppending = true;
+        if (cacheImageItems.length > 0 || hasEmergencyFlowPool()) {
+          extendFlowLoadingBuffer();
+        }
         updateFlowLoader("Adding images...");
         try {
           let appended = 0;
           const targetAppendCount = getFlowAppendCount(count);
           while (appended < targetAppendCount) {
-            const item = takeNextFlowItem();
+            let item = takeNextFlowItem();
             if (!item) {
               ensureCacheStock();
-              break;
+              item = takeEmergencyFlowItem();
+              if (!item) {
+                trimFlowLoadingBuffer();
+                break;
+              }
             }
             infiniteFeedEl.appendChild(buildFlowItemElement(item));
             appended += 1;
@@ -1625,6 +1761,9 @@
         } finally {
           isFlowAppending = false;
           updateFlowLoader();
+          if (getScrollRemainingPx() < FLOW_AHEAD_PX * 1.25 && (cacheImageItems.length > 0 || hasEmergencyFlowPool())) {
+            window.requestAnimationFrame(() => maintainInfiniteFeed());
+          }
         }
       }
 
@@ -1646,6 +1785,7 @@
         const docHeight = Math.max(
           document.body.scrollHeight,
           document.documentElement.scrollHeight,
+          infiniteFeedEl.getBoundingClientRect().bottom + scrollTop,
         );
         return docHeight - (scrollTop + viewportHeight);
       }
@@ -1654,11 +1794,17 @@
         if (displayMode !== "flow") {
           return;
         }
+        if (getScrollRemainingPx() < FLOW_AHEAD_PX * 1.4 && (cacheImageItems.length > 0 || hasEmergencyFlowPool())) {
+          extendFlowLoadingBuffer();
+        }
+        if (isFlowAppending) {
+          return;
+        }
         let guard = 0;
-        while (getScrollRemainingPx() < FLOW_AHEAD_PX && guard < 5) {
+        while (getScrollRemainingPx() < FLOW_AHEAD_PX && guard < 2) {
           appendFlowItems(FLOW_APPEND_BATCH);
           guard += 1;
-          if (cacheImageItems.length === 0) {
+          if (cacheImageItems.length === 0 && !shouldUseEmergencyFlow()) {
             break;
           }
         }
@@ -2066,9 +2212,9 @@
       });
 
       settingsDotEl.addEventListener("click", () => {
-        const shouldOpen = settingsPanelEl.hidden;
-        settingsPanelEl.hidden = !shouldOpen;
+        const shouldOpen = document.body.dataset.settingsOpen !== "true";
         settingsDotEl.setAttribute("aria-expanded", String(shouldOpen));
+        settingsPanelEl.setAttribute("aria-hidden", String(!shouldOpen));
         document.body.dataset.settingsOpen = shouldOpen ? "true" : "false";
       });
 
@@ -2082,6 +2228,7 @@
 
       backgroundFilterInput.addEventListener("change", () => {
         saveLocalSettings();
+        updateSettingsStates();
         backgroundAnalysisCache.clear();
         if (backgroundFilterInput.checked) {
           cacheImageItems = cacheImageItems.filter((item) => !blockedImageUrls.has(item.imageUrl));
@@ -2092,18 +2239,25 @@
 
       layoutDebugInput.addEventListener("change", () => {
         saveLocalSettings();
+        updateSettingsStates();
         updateLayoutDebugMode();
         if (displayMode === "flow") {
           relayoutFlowItems();
         }
       });
 
+      autoScrollInput.addEventListener("change", () => {
+        saveLocalSettings();
+        updateSettingsStates();
+        updateAutoScrollMode();
+      });
+
       document.addEventListener("keydown", (event) => {
-        if (event.key !== "Escape" || settingsPanelEl.hidden) {
+        if (event.key !== "Escape" || document.body.dataset.settingsOpen !== "true") {
           return;
         }
-        settingsPanelEl.hidden = true;
         settingsDotEl.setAttribute("aria-expanded", "false");
+        settingsPanelEl.setAttribute("aria-hidden", "true");
         document.body.dataset.settingsOpen = "false";
       });
 
@@ -2183,7 +2337,9 @@
 
       window.addEventListener("load", () => {
         loadLocalSettings();
+        updateSettingsStates();
         updateLayoutDebugMode();
+        updateAutoScrollMode();
         if (categoryDataInput) {
           categoryDataInput.title = "Copied from monotaro-category-scraper/data/all-categories.deep.categories.csv";
         }

@@ -41,6 +41,12 @@ body[data-page-mode="b"] {
 
 body[data-page-key="web"] {
   background: #fff;
+  caret-color: transparent;
+  user-select: none;
+}
+
+body[data-page-key="web"] * {
+  caret-color: transparent;
 }
 
 body[data-page-key="web"] .bounding-box {
@@ -296,38 +302,72 @@ body[data-loading="true"] .settings-dot {
 
 .settings-panel {
   position: fixed;
-  top: 36px;
-  left: 16px;
+  top: 13px;
+  left: 48px;
   z-index: 49;
-  width: min(280px, calc(100vw - 32px));
-  min-height: 120px;
-  padding: 14px;
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.08);
-  backdrop-filter: blur(12px);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100vw - 64px);
+  padding: 0;
+  color: #6c6c6c;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-10px);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+body[data-settings-open="true"] .settings-panel {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
 }
 
 .settings-option {
-  display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  color: #4b4b4b;
-  font-size: 12px;
-  line-height: 1.45;
+  gap: 4px;
+  color: inherit;
+  font-size: 11px;
+  line-height: 1.2;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  user-select: none;
 }
 
 .settings-option input {
-  width: 14px;
-  height: 14px;
-  margin: 0;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }
 
-.settings-option span {
+.settings-label,
+.settings-state {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 400;
+  letter-spacing: 0;
+}
+
+.settings-label::after {
+  content: " :";
+}
+
+.settings-state {
+  min-width: 22px;
+  text-transform: uppercase;
 }
 
 .infinite-feed-item {
