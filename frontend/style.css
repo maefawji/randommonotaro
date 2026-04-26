@@ -378,6 +378,11 @@ body[data-settings-open="true"] .settings-panel {
   overflow: hidden;
 }
 
+.infinite-feed-item[data-initial-reveal="true"] {
+  animation: initialImageReveal 760ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transform-origin: center;
+}
+
 .flow-section-guide {
   position: absolute;
   left: 0;
@@ -582,6 +587,7 @@ body[data-layout-debug="true"] .infinite-feed-group {
   align-items: center;
   justify-content: center;
   gap: 10px;
+  flex-wrap: wrap;
   color: var(--muted);
   font-size: 12px;
 }
@@ -598,6 +604,27 @@ body[data-layout-debug="true"] .infinite-feed-group {
   animation: flowPulse 900ms ease-in-out infinite;
 }
 
+.flow-loader-progress {
+  display: none;
+  width: min(260px, 42vw);
+  height: 1px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.flow-loader-progress-bar {
+  display: block;
+  width: calc(var(--flow-load-progress, 0) * 1%);
+  height: 100%;
+  background: currentColor;
+  opacity: 0.5;
+  transition: width 220ms ease;
+}
+
+.flow-loader[data-progress-active="true"] .flow-loader-progress {
+  display: block;
+}
+
 @keyframes flowPulse {
   0%,
   100% {
@@ -608,6 +635,23 @@ body[data-layout-debug="true"] .infinite-feed-group {
   50% {
     transform: scale(1);
     opacity: 0.7;
+  }
+}
+
+@keyframes initialImageReveal {
+  0% {
+    opacity: 0;
+    transform: scale(0.94) translateY(16px);
+  }
+
+  55% {
+    opacity: 1;
+    transform: scale(1.018) translateY(-2px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
   }
 }
 

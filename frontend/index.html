@@ -64,6 +64,9 @@
       <div id="flow-loader" class="flow-loader" aria-live="polite">
         <span class="flow-loader-dot"></span>
         <span id="flow-loader-text">Loading images...</span>
+        <span id="flow-loader-progress" class="flow-loader-progress" aria-hidden="true">
+          <span class="flow-loader-progress-bar"></span>
+        </span>
       </div>
     </main>
 
@@ -83,6 +86,7 @@
       const localStatsEl = document.getElementById("local-stats");
       const flowLoaderEl = document.getElementById("flow-loader");
       const flowLoaderTextEl = document.getElementById("flow-loader-text");
+      const flowLoaderProgressEl = document.getElementById("flow-loader-progress");
       const settingsDotEl = document.getElementById("settings-dot");
       const settingsPanelEl = document.getElementById("settings-panel");
       const backgroundFilterInput = document.getElementById("background-filter-input");
@@ -108,8 +112,9 @@
       let cacheMonitorId = null;
       const blockedImageUrls = new Set();
       const blockedPageUrls = new Set();
-      const INITIAL_PRODUCT_COUNT = 12;
+      const INITIAL_PRODUCT_COUNT = 3;
       const INITIAL_PLACE_COUNT = 3;
+      const FLOW_FIRST_DISPLAY_COUNT = 3;
       const MAX_ASPECT_PREFETCH = 8;
       const FLOW_INITIAL_COUNT = 24;
       const FLOW_APPEND_BATCH = 18;
@@ -271,13 +276,18 @@
         document.body.dataset.loading = isBusy ? "true" : "false";
       }
 
-      function updateFlowLoader(message) {
+      function updateFlowLoader(message, progress = null) {
         if (!flowLoaderEl || !flowLoaderTextEl) {
           return;
         }
         const placedCount = infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
         const isActive = isLoadingImages || isCacheRefilling || isFlowAppending;
         flowLoaderEl.dataset.active = isActive ? "true" : "false";
+        const normalizedProgress = Number.isFinite(progress) ? clamp(progress, 0, 100) : null;
+        flowLoaderEl.dataset.progressActive = normalizedProgress === null ? "false" : "true";
+        if (flowLoaderProgressEl) {
+          flowLoaderProgressEl.style.setProperty("--flow-load-progress", String(normalizedProgress ?? 0));
+        }
         flowLoaderTextEl.textContent = message || (
           isActive
             ? "Loading images..."
@@ -336,11 +346,18 @@
 
       function updateAutoScrollMode() {
         document.body.dataset.autoScroll = autoScrollInput.checked ? "true" : "false";
-        if (autoScrollInput.checked) {
+        if (autoScrollInput.checked && canStartAutoScroll()) {
           startAutoScroll();
         } else {
           stopAutoScroll();
         }
+      }
+
+      function canStartAutoScroll() {
+        if (displayMode === "flow") {
+          return infiniteFeedEl.querySelectorAll(".infinite-feed-item").length >= FLOW_FIRST_DISPLAY_COUNT;
+        }
+        return rec1El.dataset.ready === "true";
       }
 
       function startAutoScroll() {
@@ -452,9 +469,15 @@
         return unique;
       }
 
-      async function mergeIntoCache(newItems, targetCount = getCacheTarget()) {
+      async function mergeIntoCache(newItems, targetCount = getCacheTarget(), progressOptions = null) {
         const existing = new Set(cacheImageItems.map((item) => item.imageUrl));
-        for (const item of newItems) {
+        const total = Math.max(1, newItems.length);
+        for (const [index, item] of newItems.entries()) {
+          if (progressOptions) {
+            const ratio = index / total;
+            const progress = progressOptions.start + (progressOptions.end - progressOptions.start) * ratio;
+            updateFlowLoader(`${progressOptions.label} ${index + 1}/${newItems.length}`, progress);
+          }
           if (!item?.imageUrl || existing.has(item.imageUrl)) {
             continue;
           }
@@ -473,6 +496,9 @@
           if (cacheImageItems.length >= targetCount) {
             break;
           }
+        }
+        if (progressOptions) {
+          updateFlowLoader(`${progressOptions.label} ${newItems.length}/${newItems.length}`, progressOptions.end);
         }
       }
 
@@ -683,7 +709,7 @@
           return;
         }
         isCacheRefilling = true;
-        updateFlowLoader("Loading more images...");
+        updateFlowLoader("Loading more images...", 12);
         crawlStateEl.textContent = "Crawl state: picking random categories...";
         try {
           let safety = 0;
@@ -691,10 +717,16 @@
           while (cacheImageItems.length < targetCount && safety < maxAttempts) {
             const before = cacheImageItems.length;
             const batchCount = Math.max(1, Math.min(24, targetCount - cacheImageItems.length));
+            const progressBase = Math.min(88, Math.round((cacheImageItems.length / targetCount) * 100));
+            updateFlowLoader(`Loading more images ${cacheImageItems.length}/${targetCount}`, progressBase);
             const { data, newItems } = await fetchRandomProducts(batchCount);
             lastUrlCount = Number(data.url_count || 0);
             lastImageCount = Number(data.image_count || 0);
-            await mergeIntoCache(newItems, targetCount);
+            await mergeIntoCache(newItems, targetCount, {
+              label: "Filtering more images",
+              start: progressBase,
+              end: Math.min(94, progressBase + 8),
+            });
             refreshCacheUi();
             if (cacheImageItems.length === before) {
               safety += 1;
@@ -707,6 +739,7 @@
           aspectQueue.length = 0;
           if (displayMode === "wall") {
             fillAspectQueue();
+            updateAutoScrollMode();
           }
           if (displayMode === "flow") {
             maintainInfiniteFeed();
@@ -1728,11 +1761,16 @@
         });
       }
 
-      async function appendFlowItems(count) {
+      async function appendFlowItems(count, options = {}) {
         if (isFlowAppending || displayMode !== "flow") {
           if (cacheImageItems.length > 0 || hasEmergencyFlowPool()) {
             extendFlowLoadingBuffer();
           }
+          return;
+        }
+        if (!infiniteFeedEl.children.length && cacheImageItems.length < FLOW_FIRST_DISPLAY_COUNT) {
+          ensureCacheStock();
+          updateFlowLoader(`Waiting for first ${FLOW_FIRST_DISPLAY_COUNT} images ${cacheImageItems.length}/${FLOW_FIRST_DISPLAY_COUNT}`, 74);
           return;
         }
         isFlowAppending = true;
@@ -1742,7 +1780,7 @@
         updateFlowLoader("Adding images...");
         try {
           let appended = 0;
-          const targetAppendCount = getFlowAppendCount(count);
+          const targetAppendCount = options.exact ? count : getFlowAppendCount(count);
           while (appended < targetAppendCount) {
             let item = takeNextFlowItem();
             if (!item) {
@@ -1753,8 +1791,16 @@
                 break;
               }
             }
-            infiniteFeedEl.appendChild(buildFlowItemElement(item));
+            const element = buildFlowItemElement(item);
+            if (infiniteFeedEl.querySelectorAll(".infinite-feed-item").length < FLOW_FIRST_DISPLAY_COUNT) {
+              element.dataset.initialReveal = "true";
+              element.style.animationDelay = `${appended * 120}ms`;
+            }
+            infiniteFeedEl.appendChild(element);
             appended += 1;
+          }
+          if (appended > 0) {
+            updateAutoScrollMode();
           }
           refreshCacheUi();
           ensureCacheStock();
@@ -1794,6 +1840,10 @@
         if (displayMode !== "flow") {
           return;
         }
+        if (!infiniteFeedEl.children.length && cacheImageItems.length < FLOW_FIRST_DISPLAY_COUNT) {
+          ensureCacheStock();
+          return;
+        }
         if (getScrollRemainingPx() < FLOW_AHEAD_PX * 1.4 && (cacheImageItems.length > 0 || hasEmergencyFlowPool())) {
           extendFlowLoadingBuffer();
         }
@@ -1828,8 +1878,15 @@
       }
 
       function startFlowMode() {
+        if (!infiniteFeedEl.children.length && cacheImageItems.length < FLOW_FIRST_DISPLAY_COUNT) {
+          ensureCacheStock();
+          updateFlowLoader(`Waiting for first ${FLOW_FIRST_DISPLAY_COUNT} images ${cacheImageItems.length}/${FLOW_FIRST_DISPLAY_COUNT}`, 74);
+          return;
+        }
         if (!infiniteFeedEl.children.length) {
-          appendFlowItems(FLOW_INITIAL_COUNT);
+          appendFlowItems(FLOW_FIRST_DISPLAY_COUNT, { exact: true });
+          window.requestAnimationFrame(() => maintainInfiniteFeed());
+          return;
         }
         maintainInfiniteFeed();
       }
@@ -2293,30 +2350,46 @@
           blockedImageUrls.clear();
           blockedPageUrls.clear();
           statusEl.textContent = "Loading images...";
-          updateFlowLoader("Loading images...");
+          updateFlowLoader("Preparing initial load...", 3);
           crawlStateEl.textContent = "Crawl state: picking random categories...";
           advancedResultEl.textContent = "Result: loading...";
           cachedPageUrlsEl.textContent = "Cached Page URLs: loading...";
           cachedImageUrlsEl.textContent = "Cached Image URLs: loading...";
           const query = buildFetchQuery(initialCount);
+          updateFlowLoader(`Fetching products 0/${initialCount}`, 12);
           const data = await fetchJson(`/api/monotaro-random-products?${query.toString()}`);
+          updateFlowLoader(`Fetching products ${initialCount}/${initialCount}`, 36);
           lastUrlCount = Number(data.url_count || 0);
           lastImageCount = Number(data.image_count || 0);
           const initialItems = extractUniqueImageItemsFromData(data);
-          await mergeIntoCache(initialItems, targetCount);
+          updateFlowLoader(`Filtering images 0/${initialItems.length}`, 42);
+          await mergeIntoCache(initialItems, FLOW_FIRST_DISPLAY_COUNT, {
+            label: "Filtering images",
+            start: 42,
+            end: 72,
+          });
+          if (cacheImageItems.length < FLOW_FIRST_DISPLAY_COUNT) {
+            updateFlowLoader(`Waiting for first ${FLOW_FIRST_DISPLAY_COUNT} images ${cacheImageItems.length}/${FLOW_FIRST_DISPLAY_COUNT}`, 74);
+            await refillCacheToTarget(FLOW_FIRST_DISPLAY_COUNT);
+          }
           refreshCacheUi();
           if (displayMode === "flow") {
+            updateFlowLoader("Composing first layout...", 82);
             startFlowMode();
           } else {
             fillAspectQueue();
+            updateFlowLoader("Placing first image...", 82);
             await placeRec1();
             let anchorRec = rec1El;
             for (let index = 1; index < INITIAL_PLACE_COUNT; index += 1) {
+              updateFlowLoader(`Placing images ${index + 1}/${INITIAL_PLACE_COUNT}`, 82 + Math.round((index / INITIAL_PLACE_COUNT) * 12));
               await createNextRec(anchorRec);
               const recs = wallEl.querySelectorAll(".bounding-box");
               anchorRec = recs[recs.length - 1] || anchorRec;
             }
+            updateAutoScrollMode();
           }
+          updateFlowLoader("Initial load ready", 100);
           ensureCacheStock();
         } catch (error) {
           statusEl.textContent = error.message || "Failed to load images.";
