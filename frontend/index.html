@@ -24,6 +24,11 @@
         <span class="settings-label">Auto Scroll</span>
         <span class="settings-state" data-setting-state-for="auto-scroll-input">ON</span>
       </label>
+      <label class="settings-option">
+        <input id="wall-mode-input" type="checkbox" />
+        <span class="settings-label">Wall Mode</span>
+        <span class="settings-state" data-setting-state-for="wall-mode-input">OFF</span>
+      </label>
     </aside>
 
     <main class="app-shell">
@@ -92,6 +97,7 @@
       const backgroundFilterInput = document.getElementById("background-filter-input");
       const layoutDebugInput = document.getElementById("layout-debug-input");
       const autoScrollInput = document.getElementById("auto-scroll-input");
+      const wallModeInput = document.getElementById("wall-mode-input");
 
       const API_BASE = "";
       const LOCAL_SETTINGS_KEY = "webpage-viewer-local-settings-v2";
@@ -317,6 +323,9 @@
           if (typeof settings.autoScroll === "boolean") {
             autoScrollInput.checked = settings.autoScroll;
           }
+          if (typeof settings.wallMode === "boolean") {
+            wallModeInput.checked = settings.wallMode;
+          }
         } catch (error) {
           window.localStorage.removeItem(LOCAL_SETTINGS_KEY);
         }
@@ -329,6 +338,7 @@
           excludeBackgroundImages: backgroundFilterInput.checked,
           showLayoutDebug: layoutDebugInput.checked,
           autoScroll: autoScrollInput.checked,
+          wallMode: wallModeInput.checked,
         };
         window.localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(settings));
       }
@@ -433,11 +443,23 @@
         infiniteFeedEl.style.minHeight = `${Math.ceil(safeMinHeight)}px`;
       }
 
-      function setDisplayMode(nextMode) {
-        displayMode = "flow";
+      function setDisplayMode(nextMode, shouldStart = true) {
+        displayMode = nextMode === "wall" ? "wall" : "flow";
         document.body.dataset.displayMode = displayMode;
+        wallEl.hidden = displayMode !== "wall";
+        infiniteFeedEl.hidden = displayMode !== "flow";
+        if (!shouldStart) {
+          refreshLocalStats();
+          return;
+        }
+        if (displayMode === "wall") {
+          stopAutoScroll();
+          startWallMode();
+        } else {
+          startFlowMode();
+          updateAutoScrollMode();
+        }
         refreshLocalStats();
-        startFlowMode();
       }
 
       function startCacheMonitor() {
@@ -751,6 +773,30 @@
           if (displayMode === "flow") {
             window.requestAnimationFrame(() => maintainInfiniteFeed());
           }
+        }
+      }
+
+      async function loadFirstFilteredImages(requiredCount = FLOW_FIRST_DISPLAY_COUNT) {
+        let attempts = 0;
+        const maxAttempts = 12;
+        while (cacheImageItems.length < requiredCount && attempts < maxAttempts) {
+          const before = cacheImageItems.length;
+          const batchCount = Math.max(INITIAL_PRODUCT_COUNT, requiredCount - cacheImageItems.length);
+          updateFlowLoader(`Fetching first images ${cacheImageItems.length}/${requiredCount}`, 12);
+          const { data, newItems } = await fetchRandomProducts(batchCount);
+          lastUrlCount = Number(data.url_count || 0);
+          lastImageCount = Number(data.image_count || 0);
+          updateFlowLoader(`Filtering first images ${cacheImageItems.length}/${requiredCount}`, 42);
+          await mergeIntoCache(newItems, requiredCount, {
+            label: "Filtering first images",
+            start: 42,
+            end: 72,
+          });
+          refreshCacheUi();
+          attempts += cacheImageItems.length === before ? 2 : 1;
+        }
+        if (cacheImageItems.length < requiredCount) {
+          throw new Error(`Could not find ${requiredCount} filtered images.`);
         }
       }
 
@@ -1208,9 +1254,10 @@
         element.dataset.layoutPattern = layoutPattern;
         element.dataset.sizePattern = sizePattern;
         element.dataset.unit = item.__isGroup ? "group" : "image";
+        const placementLabel = getFlowPlacementLabel(layoutPattern);
         element.dataset.debugLabel = [
           `S${sectionIndex}`,
-          layoutPattern,
+          placementLabel,
           item.__isGroup ? `group:${item.__groupLayout || "row"}` : "image",
           item.categoryPath || item.categoryName || "",
         ].filter(Boolean).join(" / ");
@@ -1251,6 +1298,14 @@
           "matrix-9",
           "single-row",
         ]).has(layoutPattern);
+      }
+
+      function isStrictFlowGridSection(layoutPattern) {
+        return layoutPattern === "big-left-right" || layoutPattern === "single-row";
+      }
+
+      function getFlowPlacementLabel(layoutPattern) {
+        return isStrictFlowGridSection(layoutPattern) ? layoutPattern : `offgrid:${layoutPattern}`;
       }
 
       function getFlowLayoutPattern(sectionIndex) {
@@ -1359,7 +1414,7 @@
         guide.dataset.top = String(nextTop);
         guide.dataset.bottom = String(nextBottom);
         guide.dataset.layoutPattern = layoutPattern;
-        guide.dataset.debugLabel = `Section ${sectionIndex} / ${layoutPattern}`;
+        guide.dataset.debugLabel = `Section ${sectionIndex} / ${getFlowPlacementLabel(layoutPattern)}`;
         const grid = getFlowSectionGrid(layoutPattern, sectionIndex);
         guide.style.setProperty("--flow-section-columns", String(grid.columns));
         guide.style.setProperty("--flow-section-rows", String(grid.rows));
@@ -1402,7 +1457,7 @@
       }
 
       function getStrictSectionGridCell({ layoutPattern, sectionLayout, sectionInfo, viewportWidth }) {
-        if (!sectionLayout || (layoutPattern !== "big-left-right" && layoutPattern !== "single-row")) {
+        if (!sectionLayout || !isStrictFlowGridSection(layoutPattern)) {
           return null;
         }
         const grid = getFlowSectionGrid(layoutPattern, sectionInfo.index);
@@ -2309,6 +2364,12 @@
         updateAutoScrollMode();
       });
 
+      wallModeInput.addEventListener("change", () => {
+        saveLocalSettings();
+        updateSettingsStates();
+        setDisplayMode(wallModeInput.checked ? "wall" : "flow");
+      });
+
       document.addEventListener("keydown", (event) => {
         if (event.key !== "Escape" || document.body.dataset.settingsOpen !== "true") {
           return;
@@ -2331,7 +2392,6 @@
 
       async function loadImages() {
         const targetCount = getCacheTarget();
-        const initialCount = Math.min(INITIAL_PRODUCT_COUNT, targetCount);
         let loadErrorMessage = "";
 
         try {
@@ -2355,23 +2415,7 @@
           advancedResultEl.textContent = "Result: loading...";
           cachedPageUrlsEl.textContent = "Cached Page URLs: loading...";
           cachedImageUrlsEl.textContent = "Cached Image URLs: loading...";
-          const query = buildFetchQuery(initialCount);
-          updateFlowLoader(`Fetching products 0/${initialCount}`, 12);
-          const data = await fetchJson(`/api/monotaro-random-products?${query.toString()}`);
-          updateFlowLoader(`Fetching products ${initialCount}/${initialCount}`, 36);
-          lastUrlCount = Number(data.url_count || 0);
-          lastImageCount = Number(data.image_count || 0);
-          const initialItems = extractUniqueImageItemsFromData(data);
-          updateFlowLoader(`Filtering images 0/${initialItems.length}`, 42);
-          await mergeIntoCache(initialItems, FLOW_FIRST_DISPLAY_COUNT, {
-            label: "Filtering images",
-            start: 42,
-            end: 72,
-          });
-          if (cacheImageItems.length < FLOW_FIRST_DISPLAY_COUNT) {
-            updateFlowLoader(`Waiting for first ${FLOW_FIRST_DISPLAY_COUNT} images ${cacheImageItems.length}/${FLOW_FIRST_DISPLAY_COUNT}`, 74);
-            await refillCacheToTarget(FLOW_FIRST_DISPLAY_COUNT);
-          }
+          await loadFirstFilteredImages(FLOW_FIRST_DISPLAY_COUNT);
           refreshCacheUi();
           if (displayMode === "flow") {
             updateFlowLoader("Composing first layout...", 82);
@@ -2410,9 +2454,9 @@
 
       window.addEventListener("load", () => {
         loadLocalSettings();
+        setDisplayMode(wallModeInput.checked ? "wall" : "flow", false);
         updateSettingsStates();
         updateLayoutDebugMode();
-        updateAutoScrollMode();
         if (categoryDataInput) {
           categoryDataInput.title = "Copied from monotaro-category-scraper/data/all-categories.deep.categories.csv";
         }

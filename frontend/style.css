@@ -61,8 +61,14 @@ body[data-page-key="web"] .infinite-feed {
   display: grid;
 }
 
-body[data-page-key="web"] #wall-surface {
+body[data-page-key="web"][data-display-mode="flow"] #wall-surface,
+body[data-page-key="web"][data-display-mode="wall"] .infinite-feed,
+body[data-page-key="web"][data-display-mode="wall"] .flow-loader {
   display: none;
+}
+
+body[data-page-key="web"][data-display-mode="wall"] #wall-surface {
+  display: block;
 }
 
 body[data-page-mode="b"] .app-shell {
@@ -423,8 +429,8 @@ body[data-settings-open="true"] .settings-panel {
 
 body[data-layout-debug="true"] .flow-section-guide {
   display: block;
-  border: 1px dashed rgba(255, 151, 0, 0.9);
-  background-color: rgba(255, 191, 0, 0.06);
+  border: 0;
+  background-color: transparent;
 }
 
 body[data-layout-debug="true"] .infinite-feed-item {
