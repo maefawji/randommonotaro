@@ -2332,7 +2332,10 @@
         flowPlacedItems.length = 0;
 
         archiveItems.forEach((item, index) => {
-          infiniteFeedEl.appendChild(buildFlowItemElement(item));
+          const element = buildFlowItemElement(item);
+          element.dataset.initialReveal = "true";
+          element.style.animationDelay = `${Math.min(index * 28, 520)}ms`;
+          infiniteFeedEl.appendChild(element);
         });
         trimFlowLoadingBuffer();
         refreshLocalStats();
