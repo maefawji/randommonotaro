@@ -131,6 +131,7 @@
       const LOCAL_SETTINGS_KEY = "webpage-viewer-local-settings-v3";
       let recCount = 1;
       let cacheImageItems = [];
+      let loadedImageItems = [];
       let isPlacing = false;
       let isCacheRefilling = false;
       let isLoadingImages = false;
@@ -568,13 +569,13 @@
           updateAutoMode();
         } else if (displayMode === "list") {
           if (infiniteFeedEl.children.length) {
-            resetFlowFeed();
+            resetFeedPlacement();
           }
           await startListMode();
           updateAutoMode();
         } else {
           if (infiniteFeedEl.children.length) {
-            relayoutFlowItems();
+            resetFeedPlacement();
           }
           await startFlowMode();
           updateAutoMode();
@@ -614,7 +615,7 @@
       }
 
       async function mergeIntoCache(newItems, targetCount = getCacheTarget(), progressOptions = null) {
-        const existing = new Set(cacheImageItems.map((item) => item.imageUrl));
+        const existing = new Set(loadedImageItems.map((item) => item.imageUrl));
         const total = Math.max(1, newItems.length);
         for (const [index, item] of newItems.entries()) {
           if (progressOptions) {
@@ -635,9 +636,10 @@
             blockedImageUrls.add(item.imageUrl);
             continue;
           }
+          loadedImageItems.push(item);
           cacheImageItems.push(item);
           existing.add(item.imageUrl);
-          if (cacheImageItems.length >= targetCount) {
+          if (loadedImageItems.length >= targetCount) {
             break;
           }
         }
@@ -963,6 +965,35 @@
         flowSeenImageUrls.add(item.imageUrl);
         rememberFlowItem(item);
         return item;
+      }
+
+      function rebuildCacheFromLoadedItems() {
+        cacheImageItems = loadedImageItems.filter((item) =>
+          item?.imageUrl &&
+          !flowSeenImageUrls.has(item.imageUrl) &&
+          !blockedImageUrls.has(item.imageUrl) &&
+          !(item.pageUrl && blockedPageUrls.has(item.pageUrl))
+        );
+      }
+
+      function resetFeedPlacement({ preserveSeen = false } = {}) {
+        infiniteFeedEl.textContent = "";
+        infiniteFeedEl.style.minHeight = "";
+        flowNextY = 0;
+        flowPlacedRects.length = 0;
+        flowSectionLayouts.clear();
+        flowSectionGuides.clear();
+        if (!preserveSeen) {
+          flowSeenImageUrls.clear();
+        }
+        flowHistoryItems.length = 0;
+        flowMotifItems.length = 0;
+        flowMotifs.length = 0;
+        flowMotifDraft.length = 0;
+        flowPlacedItems.length = 0;
+        flowRepeatUses.clear();
+        flowLastRepeatAt.clear();
+        rebuildCacheFromLoadedItems();
       }
 
       function hasEmergencyFlowPool() {
@@ -2242,20 +2273,7 @@
       }
 
       function resetFlowFeed() {
-        infiniteFeedEl.textContent = "";
-        infiniteFeedEl.style.minHeight = "";
-        flowNextY = 0;
-        flowPlacedRects.length = 0;
-        flowSectionLayouts.clear();
-        flowSectionGuides.clear();
-        flowSeenImageUrls.clear();
-        flowHistoryItems.length = 0;
-        flowMotifItems.length = 0;
-        flowMotifs.length = 0;
-        flowMotifDraft.length = 0;
-        flowPlacedItems.length = 0;
-        flowRepeatUses.clear();
-        flowLastRepeatAt.clear();
+        resetFeedPlacement();
       }
 
       async function startFlowMode() {
@@ -2729,6 +2747,9 @@
         cacheImageItems = cacheImageItems.filter((item) =>
           item.imageUrl !== clickedImageUrl && item.pageUrl !== clickedPageUrl
         );
+        loadedImageItems = loadedImageItems.filter((item) =>
+          item.imageUrl !== clickedImageUrl && item.pageUrl !== clickedPageUrl
+        );
         readyAspects.splice(0, readyAspects.length, ...readyAspects.filter((item) => {
           if (!item) {
             return false;
@@ -2851,6 +2872,7 @@
         backgroundAnalysisCache.clear();
         if (backgroundFilterInput.checked) {
           cacheImageItems = cacheImageItems.filter((item) => !blockedImageUrls.has(item.imageUrl));
+          loadedImageItems = loadedImageItems.filter((item) => !blockedImageUrls.has(item.imageUrl));
           ensureCacheStock();
         }
         refreshCacheUi();
@@ -2911,6 +2933,7 @@
           readyAspects.length = 0;
           queuedAspectUrls.clear();
           cacheImageItems = [];
+          loadedImageItems = [];
           resetFlowFeed();
           rec1El.dataset.ready = "false";
           lastUrlCount = 0;
