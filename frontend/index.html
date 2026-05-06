@@ -126,7 +126,7 @@
       const displayModeState = document.getElementById("display-mode-state");
 
       const API_BASE = "";
-      const LOCAL_SETTINGS_KEY = "webpage-viewer-local-settings-v2";
+      const LOCAL_SETTINGS_KEY = "webpage-viewer-local-settings-v3";
       let recCount = 1;
       let cacheImageItems = [];
       let isPlacing = false;
@@ -568,7 +568,7 @@
           updateAutoMode();
         } else if (displayMode === "list") {
           if (infiniteFeedEl.children.length) {
-            relayoutFlowItems();
+            resetFlowFeed();
           }
           await startListMode();
           updateAutoMode();
@@ -931,6 +931,10 @@
       }
 
       function takeNextFlowItem() {
+        if (displayMode === "list") {
+          return takeNextFreshFlowItem();
+        }
+
         const groupUnit = takeNextFlowGroupUnit();
         if (groupUnit) {
           return groupUnit;
@@ -2029,7 +2033,7 @@
           updateFlowLoader(`Waiting for first ${FLOW_FIRST_DISPLAY_COUNT} images ${cacheImageItems.length}/${FLOW_FIRST_DISPLAY_COUNT}`, 74);
           return;
         }
-        const emergencyAtStart = cacheImageItems.length === 0 && shouldUseEmergencyFlow();
+        const emergencyAtStart = displayMode !== "list" && cacheImageItems.length === 0 && shouldUseEmergencyFlow();
         isFlowAppending = true;
         if (cacheImageItems.length > 0) {
           extendFlowLoadingBuffer();
@@ -2049,6 +2053,10 @@
             let item = takeNextFlowItem();
             if (!item) {
               ensureCacheStock();
+              if (displayMode === "list") {
+                trimFlowLoadingBuffer();
+                break;
+              }
               item = takeEmergencyFlowItem();
               if (!item) {
                 trimFlowLoadingBuffer();
