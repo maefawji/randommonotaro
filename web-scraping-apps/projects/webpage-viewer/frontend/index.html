@@ -1509,9 +1509,8 @@
       }
 
       function applyListPlacement(element, item, index) {
-        const { columns, rows } = updateListGridDimensions();
-        const maxCells = columns * rows;
-        const cellIndex = Math.min(index, maxCells - 1);
+        const columns = updateListGridDimensions(index + 1).columns;
+        const cellIndex = index;
         const cellNumber = cellIndex + 1;
         const column = (cellIndex % columns) + 1;
         const row = Math.floor(cellIndex / columns) + 1;
@@ -2120,35 +2119,35 @@
       }
 
       function getListTargetCount() {
-        const { columns, rows } = updateListGridDimensions();
-        return columns * rows;
+        updateListGridDimensions(infiniteFeedEl.querySelectorAll(".infinite-feed-item").length || FLOW_FIRST_DISPLAY_COUNT);
+        return getCacheTarget();
       }
 
-      function updateListGridDimensions() {
-        const width = Math.max(1, window.innerWidth || 960);
-        const height = Math.max(1, window.innerHeight || 720);
-        const aspect = width / height;
-        const frameWidth = Math.max(320, Math.round(width * 0.92));
-        const frameHeight = Math.max(320, Math.round(height * 0.92));
-        let columns = 6;
-        let rows = 4;
-
-        if (aspect < 0.72) {
-          columns = 2;
-          rows = 3;
-        } else if (aspect < 0.95) {
-          columns = 3;
-          rows = 3;
-        } else if (aspect < 1.15) {
-          columns = 4;
-          rows = 3;
-        } else if (aspect < 1.45) {
-          columns = 5;
-          rows = 4;
+      function getListColumnCount(width) {
+        if (width < 520) {
+          return 2;
         }
+        if (width < 760) {
+          return 3;
+        }
+        if (width < 1020) {
+          return 4;
+        }
+        if (width < 1320) {
+          return 5;
+        }
+        return 6;
+      }
+
+      function updateListGridDimensions(itemCount = infiniteFeedEl.querySelectorAll(".infinite-feed-item").length) {
+        const width = Math.max(1, window.innerWidth || 960);
+        const frameWidth = Math.max(320, Math.round(width * 0.92));
+        const columns = getListColumnCount(width);
+        const rows = Math.max(1, Math.ceil(Math.max(1, itemCount) / columns));
+        const cellSize = Math.max(96, Math.min(220, Math.floor((frameWidth / columns) * 0.72)));
 
         infiniteFeedEl.style.setProperty("--list-frame-width", `${frameWidth}px`);
-        infiniteFeedEl.style.setProperty("--list-frame-height", `${frameHeight}px`);
+        infiniteFeedEl.style.setProperty("--list-cell-size", `${cellSize}px`);
         infiniteFeedEl.style.setProperty("--list-grid-columns", String(columns));
         infiniteFeedEl.style.setProperty("--list-grid-rows", String(rows));
         return { columns, rows };

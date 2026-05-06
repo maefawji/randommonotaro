@@ -439,17 +439,17 @@ body[data-settings-open="true"] .settings-panel {
 
 body[data-display-mode="list"] .infinite-feed {
   width: min(92vw, var(--list-frame-width, 92vw));
-  height: min(92vh, var(--list-frame-height, 92vh));
   min-height: 0 !important;
   display: grid;
   grid-template-columns: repeat(var(--list-grid-columns, 6), minmax(0, 1fr));
-  grid-template-rows: repeat(var(--list-grid-rows, 4), minmax(0, 1fr));
-  grid-auto-rows: 0;
+  grid-template-rows: repeat(var(--list-grid-rows, 1), var(--list-cell-size, 180px));
+  grid-auto-rows: var(--list-cell-size, 180px);
+  grid-auto-flow: row;
   align-items: center;
   justify-items: center;
   gap: clamp(12px, 1.6vw, 26px);
   padding: clamp(14px, 2vw, 28px);
-  overflow: hidden;
+  overflow: visible;
 }
 
 body[data-display-mode="list"] .infinite-feed-item {
