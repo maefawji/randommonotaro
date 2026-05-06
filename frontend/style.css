@@ -8,6 +8,7 @@
   --accent-strong: #0b4f55;
   --accent-soft: #dff1f2;
   --shadow: 0 24px 60px rgba(32, 25, 21, 0.08);
+  --viewport-scale: 1;
 }
 
 * {
@@ -17,6 +18,7 @@
 body {
   margin: 0;
   min-height: 100vh;
+  overflow-x: hidden;
   color: var(--text);
   font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
   background:
@@ -42,6 +44,7 @@ body[data-page-mode="b"] {
 body[data-page-key="web"] {
   background: #fff;
   caret-color: transparent;
+  overflow-x: hidden;
   user-select: none;
 }
 
@@ -360,7 +363,8 @@ body[data-loading="true"] .settings-dot {
 body[data-settings-open="true"] .settings-panel {
   opacity: 1;
   pointer-events: auto;
-  transform: translateX(0);
+  transform: translateX(0) scale(calc(1 / var(--viewport-scale, 1)));
+  transform-origin: top left;
 }
 
 .settings-option {
@@ -1162,6 +1166,8 @@ body[data-page-key="web"][data-settings-open="true"] .settings-dot {
   border: 0 !important;
   border-radius: 50% !important;
   background: #9a9a9a !important;
+  transform: scale(calc(1 / var(--viewport-scale, 1))) !important;
+  transform-origin: top left !important;
 }
 
 body[data-page-mode="b"] .fetch-form[data-busy="true"] button {

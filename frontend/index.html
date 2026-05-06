@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Webpage Image Viewer</title>
     <link rel="stylesheet" href="./style.css" />
+    <script>
+      window.WEBPAGE_VIEWER_CONFIG = {
+        apiBase: "",
+      };
+    </script>
   </head>
   <body data-page-mode="b" data-page-key="web" data-display-mode="flow">
     <div id="settings-dot" class="settings-dot" role="button" tabindex="0" aria-label="Open settings" aria-expanded="false" aria-controls="settings-panel"></div>
@@ -127,7 +132,7 @@
       const displayModeInput = document.getElementById("display-mode-input");
       const displayModeState = document.getElementById("display-mode-state");
 
-      const API_BASE = "";
+      const API_BASE = String(window.WEBPAGE_VIEWER_CONFIG?.apiBase || "").replace(/\/$/, "");
       const LOCAL_SETTINGS_KEY = "webpage-viewer-local-settings-v3";
       let recCount = 1;
       let cacheImageItems = [];
@@ -229,7 +234,12 @@
       }
 
       function isMobileViewport() {
-        return false;
+        return (window.innerWidth || 0) < 760;
+      }
+
+      function updateViewportScale() {
+        const scale = window.visualViewport?.scale || 1;
+        document.documentElement.style.setProperty("--viewport-scale", String(Math.max(1, scale)));
       }
 
       function clamp(value, min, max) {
@@ -1380,7 +1390,7 @@
           return;
         }
         if (isMobileViewport()) {
-          element.style.cssText = "";
+          applyMobileFlowPlacement(element, item, index);
           return;
         }
 
@@ -1602,6 +1612,44 @@
         if (flowPlacedItems.length > 80) {
           flowPlacedItems.shift();
         }
+      }
+
+      function applyMobileFlowPlacement(element, item, index) {
+        const viewportWidth = Math.max(320, window.innerWidth || 360);
+        const itemWidth = Math.round(clamp(viewportWidth * 0.82, 180, 420));
+        const itemHeight = Math.round(itemWidth * getFlowUnitHeightRatio(item));
+        const left = Math.round((viewportWidth - itemWidth) / 2);
+        const top = Math.max(24, flowNextY + (index === 0 ? 0 : 24));
+
+        element.style.left = `${left}px`;
+        element.style.top = `${top}px`;
+        element.style.width = `${itemWidth}px`;
+        element.style.height = `${itemHeight}px`;
+        element.style.marginTop = "";
+        element.style.transform = "";
+        element.style.gridColumn = "";
+        element.style.gridRow = "";
+        element.dataset.sectionIndex = String(index);
+        element.dataset.itemIndex = String(index);
+        element.dataset.layoutPattern = "mobile";
+        element.dataset.sizePattern = "mobile";
+        element.dataset.unit = item.__isGroup ? "group" : "image";
+        element.dataset.debugLabel = [
+          `M${index}`,
+          item.categoryPath || item.categoryName || "",
+        ].filter(Boolean).join(" / ");
+
+        flowPlacedRects.push({ x: left, y: top, width: itemWidth, height: itemHeight });
+        flowPlacedItems.push({
+          item,
+          side: "center",
+          wasLarge: false,
+        });
+        if (flowPlacedItems.length > 80) {
+          flowPlacedItems.shift();
+        }
+        flowNextY = top + itemHeight + 32;
+        infiniteFeedEl.style.minHeight = `${Math.ceil(flowNextY + window.innerHeight * 0.35)}px`;
       }
 
       function getFlowSectionItemCount(sectionIndex) {
@@ -2976,6 +3024,7 @@
       }, { passive: true });
 
       window.addEventListener("resize", () => {
+        updateViewportScale();
         if (displayMode === "list") {
           renderListArchive();
         } else if (isFeedDisplayMode()) {
@@ -2983,6 +3032,11 @@
         }
         maintainInfiniteFeed();
       });
+
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", updateViewportScale);
+        window.visualViewport.addEventListener("scroll", updateViewportScale);
+      }
 
       async function loadImages() {
         const targetCount = getCacheTarget();
@@ -3053,6 +3107,7 @@
 
       window.addEventListener("load", async () => {
         loadLocalSettings();
+        updateViewportScale();
         setDisplayMode(displayMode, false);
         updateSettingsStates();
         updateLayoutDebugMode();
