@@ -976,6 +976,25 @@
         );
       }
 
+      function getListArchiveItems() {
+        const seen = new Set();
+        const items = [];
+        for (const item of loadedImageItems) {
+          if (!item?.imageUrl || seen.has(item.imageUrl)) {
+            continue;
+          }
+          if (blockedImageUrls.has(item.imageUrl)) {
+            continue;
+          }
+          if (item.pageUrl && blockedPageUrls.has(item.pageUrl)) {
+            continue;
+          }
+          seen.add(item.imageUrl);
+          items.push(item);
+        }
+        return items;
+      }
+
       function resetFeedPlacement({ preserveSeen = false } = {}) {
         infiniteFeedEl.textContent = "";
         infiniteFeedEl.style.minHeight = "";
@@ -2155,8 +2174,9 @@
       }
 
       function getListTargetCount() {
-        updateListGridDimensions(infiniteFeedEl.querySelectorAll(".infinite-feed-item").length || FLOW_FIRST_DISPLAY_COUNT);
-        return getCacheTarget();
+        const archiveCount = getListArchiveItems().length || infiniteFeedEl.querySelectorAll(".infinite-feed-item").length || FLOW_FIRST_DISPLAY_COUNT;
+        updateListGridDimensions(archiveCount);
+        return Math.max(getCacheTarget(), archiveCount);
       }
 
       function getListColumnCount(width) {
@@ -2226,14 +2246,8 @@
           return;
         }
         if (displayMode === "list") {
-          const targetCount = getListTargetCount();
-          if (trimListItemsToTarget(targetCount)) {
-            relayoutFlowItems();
-          }
-          const missingCount = targetCount - infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
-          if (missingCount > 0 && !isFlowAppending) {
-            appendFlowItems(missingCount, { exact: true });
-          }
+          renderListArchive();
+          ensureCacheStock();
           return;
         }
         if (!infiniteFeedEl.children.length && cacheImageItems.length < FLOW_FIRST_DISPLAY_COUNT) {
@@ -2292,19 +2306,38 @@
       }
 
       async function startListMode() {
-        const targetCount = getListTargetCount();
-        trimListItemsToTarget(targetCount);
-        relayoutFlowItems();
-        if (!infiniteFeedEl.children.length && cacheImageItems.length === 0) {
+        if (!renderListArchive()) {
+          const targetCount = getListTargetCount();
           ensureCacheStock();
           updateFlowLoader(`Waiting for list images 0/${targetCount}`, 74);
           return;
         }
-        const missingCount = targetCount - infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
-        if (missingCount > 0) {
-          await appendFlowItems(missingCount, { exact: true });
-          return;
+        ensureCacheStock();
+      }
+
+      function renderListArchive() {
+        const archiveItems = getListArchiveItems();
+        updateListGridDimensions(archiveItems.length || 1);
+        if (!archiveItems.length) {
+          infiniteFeedEl.textContent = "";
+          refreshLocalStats();
+          return false;
         }
+
+        infiniteFeedEl.textContent = "";
+        infiniteFeedEl.style.minHeight = "";
+        flowPlacedRects.length = 0;
+        flowSectionLayouts.clear();
+        flowSectionGuides.clear();
+        flowPlacedItems.length = 0;
+
+        archiveItems.forEach((item, index) => {
+          infiniteFeedEl.appendChild(buildFlowItemElement(item));
+        });
+        trimFlowLoadingBuffer();
+        refreshLocalStats();
+        refreshCacheUi();
+        return true;
       }
 
       async function startWallMode() {
