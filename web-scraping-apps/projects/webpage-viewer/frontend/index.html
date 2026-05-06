@@ -1509,19 +1509,31 @@
       }
 
       function applyListPlacement(element, item, index) {
+        const { columns, rows } = updateListGridDimensions();
+        const maxCells = columns * rows;
+        const cellIndex = Math.min(index, maxCells - 1);
+        const cellNumber = cellIndex + 1;
+        const column = (cellIndex % columns) + 1;
+        const row = Math.floor(cellIndex / columns) + 1;
         element.style.left = "";
         element.style.top = "";
         element.style.width = "";
         element.style.height = "";
         element.style.marginTop = "";
         element.style.transform = "";
+        element.style.gridColumn = String(column);
+        element.style.gridRow = String(row);
         element.dataset.sectionIndex = "";
-        element.dataset.itemIndex = String(index);
+        element.dataset.itemIndex = String(cellIndex);
+        element.dataset.cellNumber = String(cellNumber);
+        element.dataset.gridColumn = String(column);
+        element.dataset.gridRow = String(row);
         element.dataset.layoutPattern = "list";
         element.dataset.sizePattern = "list";
         element.dataset.unit = item.__isGroup ? "group" : "image";
         element.dataset.debugLabel = [
-          `L${index}`,
+          `L${String(cellNumber).padStart(2, "0")}`,
+          `r${row}c${column}`,
           item.__isGroup ? `group:${item.__groupLayout || "row"}` : "image",
           item.categoryPath || item.categoryName || "",
         ].filter(Boolean).join(" / ");
@@ -2050,6 +2062,10 @@
             return;
           }
           while (appended < targetAppendCount) {
+            if (displayMode === "list" && infiniteFeedEl.querySelectorAll(".infinite-feed-item").length >= getListTargetCount()) {
+              trimFlowLoadingBuffer();
+              break;
+            }
             let item = takeNextFlowItem();
             if (!item) {
               ensureCacheStock();
@@ -2112,6 +2128,8 @@
         const width = Math.max(1, window.innerWidth || 960);
         const height = Math.max(1, window.innerHeight || 720);
         const aspect = width / height;
+        const frameWidth = Math.max(320, Math.round(width * 0.92));
+        const frameHeight = Math.max(320, Math.round(height * 0.92));
         let columns = 6;
         let rows = 4;
 
@@ -2129,6 +2147,8 @@
           rows = 4;
         }
 
+        infiniteFeedEl.style.setProperty("--list-frame-width", `${frameWidth}px`);
+        infiniteFeedEl.style.setProperty("--list-frame-height", `${frameHeight}px`);
         infiniteFeedEl.style.setProperty("--list-grid-columns", String(columns));
         infiniteFeedEl.style.setProperty("--list-grid-rows", String(rows));
         return { columns, rows };
