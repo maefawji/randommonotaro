@@ -2250,7 +2250,7 @@
           return;
         }
         if (displayMode === "list") {
-          renderListArchive();
+          appendListArchiveItems();
           ensureCacheStock();
           return;
         }
@@ -2976,7 +2976,9 @@
       }, { passive: true });
 
       window.addEventListener("resize", () => {
-        if (isFeedDisplayMode()) {
+        if (displayMode === "list") {
+          renderListArchive();
+        } else if (isFeedDisplayMode()) {
           relayoutFlowItems();
         }
         maintainInfiniteFeed();
