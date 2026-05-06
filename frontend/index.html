@@ -9,31 +9,33 @@
   <body data-page-mode="b" data-page-key="web" data-display-mode="flow">
     <div id="settings-dot" class="settings-dot" role="button" tabindex="0" aria-label="Open settings" aria-expanded="false" aria-controls="settings-panel"></div>
     <aside id="settings-panel" class="settings-panel" aria-hidden="true">
-      <label class="settings-option settings-menu-control">
-        <input id="concept-toggle-input" type="checkbox" aria-controls="concept-panel" />
-        <span class="settings-label concept-label">Text</span>
-        <span class="settings-state settings-state-empty" aria-hidden="true"></span>
-      </label>
-      <label class="settings-option settings-menu-control">
-        <input id="display-mode-input" type="checkbox" />
-        <span class="settings-label">Display Mode</span>
-        <span id="display-mode-state" class="settings-state">Scroll</span>
-      </label>
-      <label class="settings-option settings-menu-control">
-        <input id="auto-scroll-input" type="checkbox" checked />
-        <span class="settings-label">Auto</span>
-        <span class="settings-state" data-setting-state-for="auto-scroll-input">ON</span>
-      </label>
-      <label class="settings-option settings-menu-control">
-        <input id="background-filter-input" type="checkbox" checked />
-        <span class="settings-label">Background Filter</span>
-        <span class="settings-state" data-setting-state-for="background-filter-input">ON</span>
-      </label>
-      <label class="settings-option settings-menu-control">
-        <input id="layout-debug-input" type="checkbox" />
-        <span class="settings-label">Layout Guides</span>
-        <span class="settings-state" data-setting-state-for="layout-debug-input">OFF</span>
-      </label>
+      <div class="settings-controls">
+        <label class="settings-option settings-menu-control">
+          <input id="concept-toggle-input" type="checkbox" aria-controls="concept-panel" />
+          <span class="settings-label concept-label">Text</span>
+          <span class="settings-state" data-setting-state-for="concept-toggle-input">OFF</span>
+        </label>
+        <label class="settings-option settings-menu-control">
+          <input id="display-mode-input" type="checkbox" />
+          <span class="settings-label">Display Mode</span>
+          <span id="display-mode-state" class="settings-state">Scroll</span>
+        </label>
+        <label class="settings-option settings-menu-control">
+          <input id="auto-scroll-input" type="checkbox" checked />
+          <span class="settings-label">Auto</span>
+          <span class="settings-state" data-setting-state-for="auto-scroll-input">ON</span>
+        </label>
+        <label class="settings-option settings-menu-control">
+          <input id="background-filter-input" type="checkbox" checked />
+          <span class="settings-label">Background Filter</span>
+          <span class="settings-state" data-setting-state-for="background-filter-input">ON</span>
+        </label>
+        <label class="settings-option settings-menu-control">
+          <input id="layout-debug-input" type="checkbox" />
+          <span class="settings-label">Layout Guides</span>
+          <span class="settings-state" data-setting-state-for="layout-debug-input">OFF</span>
+        </label>
+      </div>
       <p id="concept-panel" class="concept-panel" hidden>
         Drift Hardware Store
         <br /><br />
@@ -172,8 +174,6 @@
       const FLOW_EMERGENCY_REPEAT_COOLDOWN = 4;
       const FLOW_EMERGENCY_LAST_REPEAT_COOLDOWN = 10;
       const FLOW_GROUP_CHANCE = 0.24;
-      const LIST_GRID_MIN_CELL_PX = 170;
-      const LIST_GRID_ROW_HEIGHT_PX = 190;
       const WALL_MIN_REC_SIZE_PX = 56;
       const WALL_SLOT_RANDOM_ATTEMPTS = 120;
       const WALL_SLOT_GRID_STEPS = 9;
@@ -2104,11 +2104,43 @@
       }
 
       function getListTargetCount() {
-        const frameWidth = Math.max(320, (window.innerWidth || 960) * 0.92);
-        const frameHeight = Math.max(320, (window.innerHeight || 720) * 0.92);
-        const columns = Math.max(2, Math.floor(frameWidth / LIST_GRID_MIN_CELL_PX));
-        const rows = Math.max(2, Math.floor(frameHeight / LIST_GRID_ROW_HEIGHT_PX));
-        return Math.max(4, Math.min(48, columns * rows));
+        const { columns, rows } = updateListGridDimensions();
+        return columns * rows;
+      }
+
+      function updateListGridDimensions() {
+        const width = Math.max(1, window.innerWidth || 960);
+        const height = Math.max(1, window.innerHeight || 720);
+        const aspect = width / height;
+        let columns = 6;
+        let rows = 4;
+
+        if (aspect < 0.72) {
+          columns = 2;
+          rows = 3;
+        } else if (aspect < 0.95) {
+          columns = 3;
+          rows = 3;
+        } else if (aspect < 1.15) {
+          columns = 4;
+          rows = 3;
+        } else if (aspect < 1.45) {
+          columns = 5;
+          rows = 4;
+        }
+
+        infiniteFeedEl.style.setProperty("--list-grid-columns", String(columns));
+        infiniteFeedEl.style.setProperty("--list-grid-rows", String(rows));
+        return { columns, rows };
+      }
+
+      function trimListItemsToTarget(targetCount) {
+        const items = Array.from(infiniteFeedEl.querySelectorAll(".infinite-feed-item"));
+        if (items.length <= targetCount) {
+          return false;
+        }
+        items.slice(targetCount).forEach((item) => item.remove());
+        return true;
       }
 
       function getScrollRemainingPx() {
@@ -2139,7 +2171,11 @@
           return;
         }
         if (displayMode === "list") {
-          const missingCount = getListTargetCount() - infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
+          const targetCount = getListTargetCount();
+          if (trimListItemsToTarget(targetCount)) {
+            relayoutFlowItems();
+          }
+          const missingCount = targetCount - infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
           if (missingCount > 0 && !isFlowAppending) {
             appendFlowItems(missingCount, { exact: true });
           }
@@ -2214,8 +2250,9 @@
       }
 
       async function startListMode() {
-        relayoutFlowItems();
         const targetCount = getListTargetCount();
+        trimListItemsToTarget(targetCount);
+        relayoutFlowItems();
         if (!infiniteFeedEl.children.length && cacheImageItems.length < Math.min(FLOW_FIRST_DISPLAY_COUNT, targetCount)) {
           ensureCacheStock();
           updateFlowLoader(`Waiting for list images ${cacheImageItems.length}/${targetCount}`, 74);
