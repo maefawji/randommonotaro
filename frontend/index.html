@@ -2039,7 +2039,12 @@
           }
           return;
         }
-        if (!infiniteFeedEl.children.length && cacheImageItems.length < FLOW_FIRST_DISPLAY_COUNT) {
+        if (displayMode === "list" && !infiniteFeedEl.children.length && cacheImageItems.length === 0) {
+          ensureCacheStock();
+          updateFlowLoader("Waiting for list images 0/1", 74);
+          return;
+        }
+        if (displayMode !== "list" && !infiniteFeedEl.children.length && cacheImageItems.length < FLOW_FIRST_DISPLAY_COUNT) {
           ensureCacheStock();
           updateFlowLoader(`Waiting for first ${FLOW_FIRST_DISPLAY_COUNT} images ${cacheImageItems.length}/${FLOW_FIRST_DISPLAY_COUNT}`, 74);
           return;
@@ -2272,9 +2277,9 @@
         const targetCount = getListTargetCount();
         trimListItemsToTarget(targetCount);
         relayoutFlowItems();
-        if (!infiniteFeedEl.children.length && cacheImageItems.length < Math.min(FLOW_FIRST_DISPLAY_COUNT, targetCount)) {
+        if (!infiniteFeedEl.children.length && cacheImageItems.length === 0) {
           ensureCacheStock();
-          updateFlowLoader(`Waiting for list images ${cacheImageItems.length}/${targetCount}`, 74);
+          updateFlowLoader(`Waiting for list images 0/${targetCount}`, 74);
           return;
         }
         const missingCount = targetCount - infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
