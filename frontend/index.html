@@ -9,26 +9,49 @@
   <body data-page-mode="b" data-page-key="web" data-display-mode="flow">
     <div id="settings-dot" class="settings-dot" role="button" tabindex="0" aria-label="Open settings" aria-expanded="false" aria-controls="settings-panel"></div>
     <aside id="settings-panel" class="settings-panel" aria-hidden="true">
-      <label class="settings-option">
+      <label class="settings-option settings-menu-control">
+        <input id="concept-toggle-input" type="checkbox" aria-controls="concept-panel" />
+        <span class="settings-label concept-label">Text</span>
+        <span class="settings-state settings-state-empty" aria-hidden="true"></span>
+      </label>
+      <label class="settings-option settings-menu-control">
+        <input id="display-mode-input" type="checkbox" />
+        <span class="settings-label">Display Mode</span>
+        <span id="display-mode-state" class="settings-state">Scroll</span>
+      </label>
+      <label class="settings-option settings-menu-control">
+        <input id="auto-scroll-input" type="checkbox" checked />
+        <span class="settings-label">Auto</span>
+        <span class="settings-state" data-setting-state-for="auto-scroll-input">ON</span>
+      </label>
+      <label class="settings-option settings-menu-control">
         <input id="background-filter-input" type="checkbox" checked />
         <span class="settings-label">Background Filter</span>
         <span class="settings-state" data-setting-state-for="background-filter-input">ON</span>
       </label>
-      <label class="settings-option">
+      <label class="settings-option settings-menu-control">
         <input id="layout-debug-input" type="checkbox" />
         <span class="settings-label">Layout Guides</span>
         <span class="settings-state" data-setting-state-for="layout-debug-input">OFF</span>
       </label>
-      <label class="settings-option">
-        <input id="auto-scroll-input" type="checkbox" checked />
-        <span class="settings-label">Auto Scroll</span>
-        <span class="settings-state" data-setting-state-for="auto-scroll-input">ON</span>
-      </label>
-      <label class="settings-option">
-        <input id="wall-mode-input" type="checkbox" />
-        <span class="settings-label">Wall Mode</span>
-        <span class="settings-state" data-setting-state-for="wall-mode-input">OFF</span>
-      </label>
+      <p id="concept-panel" class="concept-panel" hidden>
+        Drift Hardware Store
+        <br /><br />
+        MONOTARO is a massive Japanese online hardware and industrial supply store.
+        In this website, I collected the entire category structure of the site in advance, and display products by randomly selecting from its lowest-level categories.
+        <br /><br />
+        Sometimes I want ideas grounded in ready-made products. In those moments, instead of going to a physical store, I open MONOTARO and browse for components, tools, or materials that might be useful. However, I noticed that I always ended up returning to the same categories out of habit. This project was created as a tool to break away from those patterns and dig more deeply through the catalog.
+        <br /><br />
+        The layout itself also incorporates randomness and contrast, allowing the products to appear less as information and more as objects. Images with complex backgrounds can be excluded in order to emphasize this object-like quality.
+        <br /><br />
+        Since loading takes some time, previously fetched images are allowed to reappear. Unexpectedly, this created a kind of musical repetition. Rather than being completely random, previously seen objects gradually return and circulate again.
+        <br /><br />
+        In the end, the website became something closer to a generative environment, where MONOTARO’s products continuously drift, repeat, and recompose themselves — somewhat reminiscent of Bloom by Brian Eno.
+        <br /><br />
+        Developed by kentaro nomura
+        <br />
+        Contact: Kentaro.nmr@gmail.com
+      </p>
     </aside>
 
     <main class="app-shell">
@@ -42,7 +65,7 @@
           id="wall-surface"
           class="wall-surface"
           hidden
-          style="position:relative;width:clamp(320px,92vw,1400px);min-height:70vh;border:none;background:#fff;overflow:hidden;"
+          style="position:relative;width:92vw;height:92vh;border:none;background:#fff;overflow:hidden;"
         >
           <div id="bounding-box" class="bounding-box"></div>
         </section>
@@ -94,10 +117,13 @@
       const flowLoaderProgressEl = document.getElementById("flow-loader-progress");
       const settingsDotEl = document.getElementById("settings-dot");
       const settingsPanelEl = document.getElementById("settings-panel");
+      const conceptToggleInput = document.getElementById("concept-toggle-input");
+      const conceptPanelEl = document.getElementById("concept-panel");
       const backgroundFilterInput = document.getElementById("background-filter-input");
       const layoutDebugInput = document.getElementById("layout-debug-input");
       const autoScrollInput = document.getElementById("auto-scroll-input");
-      const wallModeInput = document.getElementById("wall-mode-input");
+      const displayModeInput = document.getElementById("display-mode-input");
+      const displayModeState = document.getElementById("display-mode-state");
 
       const API_BASE = "";
       const LOCAL_SETTINGS_KEY = "webpage-viewer-local-settings-v2";
@@ -108,33 +134,49 @@
       let isLoadingImages = false;
       let isFlowAppending = false;
       let displayMode = "flow";
+      const DISPLAY_MODES = ["flow", "wall", "list"];
+      const DISPLAY_MODE_LABELS = {
+        flow: "Scroll",
+        wall: "Wall",
+        list: "List",
+      };
       let flowNextY = 0;
       let autoScrollFrameId = null;
       let autoScrollLastTime = 0;
       let autoScrollRemainder = 0;
+      let autoWallTimerId = null;
+      let isAutoWallClicking = false;
       let removeUnderMode = true;
       let lastUrlCount = 0;
       let lastImageCount = 0;
       let cacheMonitorId = null;
       const blockedImageUrls = new Set();
       const blockedPageUrls = new Set();
-      const INITIAL_PRODUCT_COUNT = 3;
+      const INITIAL_PRODUCT_COUNT = 5;
       const INITIAL_PLACE_COUNT = 3;
-      const FLOW_FIRST_DISPLAY_COUNT = 3;
+      const FLOW_FIRST_DISPLAY_COUNT = 5;
       const MAX_ASPECT_PREFETCH = 8;
       const FLOW_INITIAL_COUNT = 24;
       const FLOW_APPEND_BATCH = 18;
-      const FLOW_AHEAD_PX = 6400;
-      const FLOW_LOADING_BUFFER_PX = 1600;
-      const FLOW_EMERGENCY_AHEAD_PX = 2200;
-      const AUTO_SCROLL_PX_PER_SECOND = 34;
-      const MOBILE_BREAKPOINT_PX = 760;
+      const FLOW_AHEAD_PX = 9000;
+      const FLOW_LOADING_BUFFER_PX = 3200;
+      const FLOW_EMERGENCY_AHEAD_PX = 120;
+      const FLOW_EMERGENCY_REVEAL_GAP_PX = 180;
+      const AUTO_SCROLL_PX_PER_SECOND = 64;
+      const AUTO_WALL_CLICK_INTERVAL_MS = 2200;
       const FLOW_SECTION_DEFAULT_ITEM_COUNT = 9;
       const FLOW_REPEAT_MEMORY_LIMIT = 42;
       const FLOW_REPEAT_MAX_AGE = 72;
-      const FLOW_REPEAT_COOLDOWN = 18;
-      const FLOW_REPEAT_MAX_USES = 2;
+      const FLOW_REPEAT_COOLDOWN = 34;
+      const FLOW_REPEAT_MAX_USES = 1;
+      const FLOW_EMERGENCY_REPEAT_COOLDOWN = 4;
+      const FLOW_EMERGENCY_LAST_REPEAT_COOLDOWN = 10;
       const FLOW_GROUP_CHANCE = 0.24;
+      const LIST_GRID_MIN_CELL_PX = 170;
+      const LIST_GRID_ROW_HEIGHT_PX = 190;
+      const WALL_MIN_REC_SIZE_PX = 56;
+      const WALL_SLOT_RANDOM_ATTEMPTS = 120;
+      const WALL_SLOT_GRID_STEPS = 9;
       const BACKGROUND_FRAME_OFFSET_PX = 6;
       const BACKGROUND_FRAME_THICKNESS_PX = 10;
       const BACKGROUND_DARKNESS_THRESHOLD = 12;
@@ -150,7 +192,7 @@
         "big-left-right",
         "big-with-group",
         "center-max-triplet",
-        "matrix-9",
+        "loose-row",
         "single-row",
         "constellation",
         "wide-pair",
@@ -186,11 +228,15 @@
       }
 
       function isMobileViewport() {
-        return window.innerWidth <= MOBILE_BREAKPOINT_PX;
+        return false;
       }
 
       function clamp(value, min, max) {
         return Math.max(min, Math.min(max, value));
+      }
+
+      function isFeedDisplayMode() {
+        return displayMode === "flow" || displayMode === "list";
       }
 
       function flattenImages(pages) {
@@ -273,7 +319,7 @@
         const blockedCount = blockedImageUrls.size + blockedPageUrls.size;
         localStatsEl.innerHTML = [
           `<span>Cache ${cacheImageItems.length}</span>`,
-          `<span>Placed ${displayMode === "flow" ? flowCount : placedCount}</span>`,
+          `<span>Placed ${isFeedDisplayMode() ? flowCount : placedCount}</span>`,
           `<span>Blocked ${blockedCount}</span>`,
         ].join("");
       }
@@ -325,8 +371,10 @@
           if (typeof settings.autoScroll === "boolean") {
             autoScrollInput.checked = settings.autoScroll;
           }
-          if (typeof settings.wallMode === "boolean") {
-            wallModeInput.checked = settings.wallMode;
+          if (settings.displayMode && DISPLAY_MODES.includes(settings.displayMode)) {
+            displayMode = settings.displayMode;
+          } else if (typeof settings.wallMode === "boolean") {
+            displayMode = settings.wallMode ? "wall" : "flow";
           }
         } catch (error) {
           window.localStorage.removeItem(LOCAL_SETTINGS_KEY);
@@ -340,7 +388,7 @@
           excludeBackgroundImages: backgroundFilterInput.checked,
           showLayoutDebug: layoutDebugInput.checked,
           autoScroll: autoScrollInput.checked,
-          wallMode: wallModeInput.checked,
+          displayMode,
         };
         window.localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(settings));
       }
@@ -354,14 +402,71 @@
           const inputEl = document.getElementById(stateEl.dataset.settingStateFor);
           stateEl.textContent = inputEl?.checked ? "ON" : "OFF";
         });
+        displayModeState.textContent = DISPLAY_MODE_LABELS[displayMode] || "Scroll";
+      }
+
+      function updateAutoMode() {
+        document.body.dataset.autoScroll = autoScrollInput.checked ? "true" : "false";
+        stopAutoScroll();
+        stopAutoWallClick();
+        if (!autoScrollInput.checked) {
+          return;
+        }
+        if (displayMode === "wall") {
+          if (canStartAutoWallClick()) {
+            startAutoWallClick();
+          }
+        } else if (canStartAutoScroll()) {
+          startAutoScroll();
+        }
       }
 
       function updateAutoScrollMode() {
-        document.body.dataset.autoScroll = autoScrollInput.checked ? "true" : "false";
-        if (autoScrollInput.checked && canStartAutoScroll()) {
-          startAutoScroll();
-        } else {
-          stopAutoScroll();
+        updateAutoMode();
+      }
+
+      function canStartAutoWallClick() {
+        return wallEl.querySelector('.bounding-box[data-ready="true"]') !== null;
+      }
+
+      function startAutoWallClick() {
+        if (autoWallTimerId !== null) {
+          return;
+        }
+        autoWallTimerId = window.setInterval(runAutoWallClick, AUTO_WALL_CLICK_INTERVAL_MS);
+      }
+
+      function stopAutoWallClick() {
+        if (autoWallTimerId !== null) {
+          window.clearInterval(autoWallTimerId);
+          autoWallTimerId = null;
+        }
+        isAutoWallClicking = false;
+      }
+
+      async function runAutoWallClick() {
+        if (
+          isAutoWallClicking ||
+          !autoScrollInput.checked ||
+          displayMode !== "wall" ||
+          isPlacing
+        ) {
+          return;
+        }
+        const recs = Array.from(wallEl.querySelectorAll('.bounding-box[data-ready="true"]'))
+          .filter((rec) => rec.dataset.wallExiting !== "true");
+        if (!recs.length) {
+          return;
+        }
+        const rec = getRandomFrom(recs);
+        if (!rec) {
+          return;
+        }
+        isAutoWallClicking = true;
+        try {
+          await handleRecClick(rec);
+        } finally {
+          isAutoWallClicking = false;
         }
       }
 
@@ -369,7 +474,7 @@
         if (displayMode === "flow") {
           return infiniteFeedEl.querySelectorAll(".infinite-feed-item").length >= FLOW_FIRST_DISPLAY_COUNT;
         }
-        return rec1El.dataset.ready === "true";
+        return false;
       }
 
       function startAutoScroll() {
@@ -391,7 +496,7 @@
       }
 
       function stepAutoScroll(timestamp) {
-        if (!autoScrollInput.checked) {
+        if (!autoScrollInput.checked || displayMode !== "flow") {
           stopAutoScroll();
           return;
         }
@@ -424,7 +529,7 @@
       }
 
       function extendFlowLoadingBuffer() {
-        if (displayMode !== "flow") {
+        if (!isFeedDisplayMode()) {
           return;
         }
         if (cacheImageItems.length === 0 && !hasEmergencyFlowPool()) {
@@ -433,34 +538,49 @@
         }
         const currentMinHeight = Number.parseFloat(infiniteFeedEl.style.minHeight || "0") || 0;
         const viewportBottom = (window.scrollY || document.documentElement.scrollTop || 0) + (window.innerHeight || 0);
-        const targetMinHeight = Math.max(currentMinHeight, flowNextY + window.innerHeight + FLOW_LOADING_BUFFER_PX, viewportBottom + FLOW_LOADING_BUFFER_PX);
+        const contentMinHeight = displayMode === "list" ? 0 : flowNextY + window.innerHeight + FLOW_LOADING_BUFFER_PX;
+        const targetMinHeight = Math.max(currentMinHeight, contentMinHeight, viewportBottom + FLOW_LOADING_BUFFER_PX);
         infiniteFeedEl.style.minHeight = `${Math.ceil(targetMinHeight)}px`;
       }
 
       function trimFlowLoadingBuffer() {
-        if (displayMode !== "flow") {
+        if (!isFeedDisplayMode()) {
           return;
         }
-        const safeMinHeight = Math.max(flowNextY + window.innerHeight, window.innerHeight * 1.2);
+        const safeMinHeight = displayMode === "list"
+          ? Math.max(document.body.scrollHeight, window.innerHeight * 1.2)
+          : Math.max(flowNextY + window.innerHeight, window.innerHeight * 1.2);
         infiniteFeedEl.style.minHeight = `${Math.ceil(safeMinHeight)}px`;
       }
 
       async function setDisplayMode(nextMode, shouldStart = true) {
-        displayMode = nextMode === "wall" ? "wall" : "flow";
+        displayMode = DISPLAY_MODES.includes(nextMode) ? nextMode : "flow";
         document.body.dataset.displayMode = displayMode;
         wallEl.hidden = displayMode !== "wall";
-        infiniteFeedEl.hidden = displayMode !== "flow";
+        infiniteFeedEl.hidden = displayMode === "wall";
         if (!shouldStart) {
+          updateSettingsStates();
           refreshLocalStats();
           return;
         }
         if (displayMode === "wall") {
-          stopAutoScroll();
           await startWallMode();
+          updateAutoMode();
+        } else if (displayMode === "list") {
+          if (infiniteFeedEl.children.length) {
+            relayoutFlowItems();
+          }
+          await startListMode();
+          updateAutoMode();
         } else {
+          if (infiniteFeedEl.children.length) {
+            relayoutFlowItems();
+          }
           await startFlowMode();
-          updateAutoScrollMode();
+          updateAutoMode();
         }
+        saveLocalSettings();
+        updateSettingsStates();
         refreshLocalStats();
       }
 
@@ -765,14 +885,14 @@
             fillAspectQueue();
             updateAutoScrollMode();
           }
-          if (displayMode === "flow") {
+          if (isFeedDisplayMode()) {
             maintainInfiniteFeed();
           }
         } finally {
           isCacheRefilling = false;
           crawlStateEl.textContent = "Crawl state: idle";
           updateFlowLoader();
-          if (displayMode === "flow") {
+          if (isFeedDisplayMode()) {
             window.requestAnimationFrame(() => maintainInfiniteFeed());
           }
         }
@@ -816,6 +936,10 @@
           return groupUnit;
         }
 
+        if (cacheImageItems.length === 0 && !shouldUseEmergencyFlow()) {
+          return null;
+        }
+
         const historyPick = pickRepeatedFlowItem();
         if (historyPick) {
           return historyPick;
@@ -845,7 +969,7 @@
         if (!hasEmergencyFlowPool()) {
           return false;
         }
-        return cacheImageItems.length === 0 || isCacheRefilling || getScrollRemainingPx() < FLOW_EMERGENCY_AHEAD_PX;
+        return cacheImageItems.length === 0 && getFlowContentRemainingPx() < FLOW_EMERGENCY_AHEAD_PX;
       }
 
       function takeEmergencyFlowItem() {
@@ -856,17 +980,18 @@
         const historyPool = flowHistoryItems.length >= 3
           ? flowHistoryItems
           : flowPlacedItems.map((entry) => entry.item).filter(Boolean);
-        if (!historyPool.length) {
+        const candidates = historyPool.filter((item) => canEmergencyRepeatFlowItem(item, nextIndex));
+        if (!candidates.length) {
           return null;
         }
-        const seed = hashString(`emergency:${nextIndex}:${historyPool.length}`);
-        const item = historyPool[seed % historyPool.length];
+        const seed = hashString(`emergency:${nextIndex}:${candidates.length}`);
+        const item = candidates[seed % candidates.length];
         if (!item?.imageUrl) {
           return null;
         }
-        return cloneFlowItem(item, {
+        return markFlowRepeat(cloneFlowItem(item, {
           repeatKind: "emergency",
-        });
+        }), nextIndex);
       }
 
       function takeNextFlowGroupUnit() {
@@ -957,7 +1082,7 @@
         const nextIndex = infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
         pruneFlowRepeatMemory(nextIndex);
         const sectionInfo = getFlowSectionInfo(nextIndex);
-        if (flowHistoryItems.length >= 12 && nextIndex > 0 && sectionInfo.index % 8 === 6) {
+        if (flowHistoryItems.length >= 18 && nextIndex > 0 && sectionInfo.index % 14 === 10) {
           const recentPool = flowHistoryItems.slice(-30).filter((item) => canRepeatFlowItem(item, nextIndex));
           if (!recentPool.length) {
             return null;
@@ -970,7 +1095,7 @@
             }), nextIndex);
           }
         }
-        if (flowMotifs.length > 0 && nextIndex > 0 && sectionInfo.index % 10 === 4) {
+        if (flowMotifs.length > 0 && nextIndex > 0 && sectionInfo.index % 18 === 9) {
           const availableMotifs = flowMotifs.filter((motif) =>
             motif.items.some((item) => canRepeatFlowItem(item, nextIndex))
           );
@@ -989,7 +1114,7 @@
             }), nextIndex);
           }
         }
-        if (flowPlacedItems.length >= 8 && nextIndex > 0 && nextIndex % 19 === 5) {
+        if (flowPlacedItems.length >= 18 && nextIndex > 0 && nextIndex % 37 === 11) {
           const candidates = flowPlacedItems.filter((source) => canRepeatFlowItem(source.item, nextIndex));
           if (candidates.length) {
             const source = candidates[hashString(`call-response:${nextIndex}`) % candidates.length];
@@ -998,7 +1123,7 @@
             }), nextIndex);
           }
         }
-        const feedbackPeriods = [11, 23, 37];
+        const feedbackPeriods = [41, 67];
         for (const period of feedbackPeriods) {
           if (flowPlacedItems.length > period && nextIndex > 0 && nextIndex % period === 0) {
             const source = flowPlacedItems[flowPlacedItems.length - period];
@@ -1009,7 +1134,7 @@
             }
           }
         }
-        if (flowMotifItems.length >= 3 && nextIndex > 0 && nextIndex % 23 >= 0 && nextIndex % 23 < flowMotifItems.length) {
+        if (flowMotifItems.length >= 3 && nextIndex > 0 && nextIndex % 47 === 0) {
           const item = flowMotifItems[(nextIndex + sectionInfo.index) % flowMotifItems.length];
           if (canRepeatFlowItem(item, nextIndex)) {
             return markFlowRepeat(cloneFlowItem(item, {
@@ -1017,7 +1142,7 @@
             }), nextIndex);
           }
         }
-        if (flowHistoryItems.length >= 6 && nextIndex > 0 && nextIndex % 11 === 0) {
+        if (flowHistoryItems.length >= 12 && nextIndex > 0 && nextIndex % 29 === 0) {
           const candidates = flowHistoryItems.filter((item) => canRepeatFlowItem(item, nextIndex));
           if (candidates.length) {
             const historyIndex = hashString(`repeat-single:${nextIndex}`) % candidates.length;
@@ -1044,6 +1169,23 @@
         }
         const lastRepeatAt = flowLastRepeatAt.get(item.imageUrl);
         return !Number.isFinite(lastRepeatAt) || nextIndex - lastRepeatAt >= FLOW_REPEAT_COOLDOWN;
+      }
+
+      function canEmergencyRepeatFlowItem(item, nextIndex) {
+        if (!item?.imageUrl) {
+          return false;
+        }
+        const firstSeenAt = Number(item.__flowSeenAt ?? 0);
+        const age = nextIndex - firstSeenAt;
+        if (age < FLOW_EMERGENCY_REPEAT_COOLDOWN) {
+          return false;
+        }
+        const uses = flowRepeatUses.get(item.imageUrl) || 0;
+        if (uses >= FLOW_REPEAT_MAX_USES) {
+          return false;
+        }
+        const lastRepeatAt = flowLastRepeatAt.get(item.imageUrl);
+        return !Number.isFinite(lastRepeatAt) || nextIndex - lastRepeatAt >= FLOW_EMERGENCY_LAST_REPEAT_COOLDOWN;
       }
 
       function markFlowRepeat(item, nextIndex) {
@@ -1142,6 +1284,23 @@
         return link;
       }
 
+      function offsetEmergencyFlowElement(element) {
+        if (displayMode === "list") {
+          return;
+        }
+        if (isMobileViewport()) {
+          element.style.marginTop = `${FLOW_EMERGENCY_REVEAL_GAP_PX}px`;
+          return;
+        }
+        const top = Number.parseFloat(element.style.top || "0");
+        if (!Number.isFinite(top)) {
+          return;
+        }
+        element.style.top = `${top + FLOW_EMERGENCY_REVEAL_GAP_PX}px`;
+        flowNextY += FLOW_EMERGENCY_REVEAL_GAP_PX;
+        infiniteFeedEl.style.minHeight = `${flowNextY + window.innerHeight}px`;
+      }
+
       function getFlowGroupGrid(layout, count) {
         const safeCount = Math.max(1, Number(count || 1));
         if (layout === "column") {
@@ -1154,6 +1313,10 @@
       }
 
       function applyFlowPlacement(element, item, index) {
+        if (displayMode === "list") {
+          applyListPlacement(element, item, index);
+          return;
+        }
         if (isMobileViewport()) {
           element.style.cssText = "";
           return;
@@ -1209,7 +1372,7 @@
         const bandOffset = getFlowBandOffset({ index: sectionItemIndex, seed, itemHeight, layoutPattern });
         let left = strictGridCell ? strictGridCell.left : preferredLeft;
         let top = strictGridCell ? strictGridCell.top : Math.max(24, (sectionLayout ? sectionLayout.top : flowNextY) + bandOffset);
-        const step = getFlowStep({ index: sectionItemIndex, seed, itemHeight, layoutPattern });
+        const step = getFlowStep({ index: sectionItemIndex, seed, itemHeight, layoutPattern, sectionIndex });
         const gap = item.__isGroup
           ? 44
           : layoutPattern === "constellation"
@@ -1297,7 +1460,7 @@
           "same-size-vertical",
           "big-with-group",
           "center-max-triplet",
-          "matrix-9",
+          "loose-row",
           "single-row",
         ]).has(layoutPattern);
       }
@@ -1341,6 +1504,33 @@
         }
       }
 
+      function applyListPlacement(element, item, index) {
+        element.style.left = "";
+        element.style.top = "";
+        element.style.width = "";
+        element.style.height = "";
+        element.style.marginTop = "";
+        element.style.transform = "";
+        element.dataset.sectionIndex = "";
+        element.dataset.itemIndex = String(index);
+        element.dataset.layoutPattern = "list";
+        element.dataset.sizePattern = "list";
+        element.dataset.unit = item.__isGroup ? "group" : "image";
+        element.dataset.debugLabel = [
+          `L${index}`,
+          item.__isGroup ? `group:${item.__groupLayout || "row"}` : "image",
+          item.categoryPath || item.categoryName || "",
+        ].filter(Boolean).join(" / ");
+        flowPlacedItems.push({
+          item,
+          side: "center",
+          wasLarge: false,
+        });
+        if (flowPlacedItems.length > 80) {
+          flowPlacedItems.shift();
+        }
+      }
+
       function getFlowSectionItemCount(sectionIndex) {
         const layoutPattern = getFlowLayoutPattern(sectionIndex);
         if (layoutPattern === "big-left-right") {
@@ -1348,6 +1538,9 @@
         }
         if (layoutPattern === "single-row") {
           return getSingleRowColumnCount(sectionIndex);
+        }
+        if (layoutPattern === "loose-row") {
+          return getLooseRowColumnCount(sectionIndex);
         }
         if (layoutPattern === "big-with-group") {
           return 2;
@@ -1428,8 +1621,8 @@
         if (layoutPattern === "big-left-right") {
           return { columns: 2, rows: 1 };
         }
-        if (layoutPattern === "matrix-9") {
-          return { columns: 9, rows: 1 };
+        if (layoutPattern === "loose-row") {
+          return { columns: getLooseRowColumnCount(sectionIndex), rows: 1 };
         }
         if (layoutPattern === "single-row") {
           return { columns: getSingleRowColumnCount(sectionIndex), rows: 1 };
@@ -1488,6 +1681,10 @@
         return 5 + (hashString(`single-row-columns:${sectionIndex}`) % 4);
       }
 
+      function getLooseRowColumnCount(sectionIndex) {
+        return 5 + (hashString(`loose-row-columns:${sectionIndex}`) % 5);
+      }
+
       function clearFlowSectionGuides() {
         flowSectionGuides.forEach((guide) => guide.remove());
         flowSectionGuides.clear();
@@ -1495,7 +1692,7 @@
 
       function getFlowSectionHeight({ layoutPattern, viewportWidth, sectionIndex }) {
         const seed = hashString(`section-height:${layoutPattern}:${sectionIndex}`);
-        if (layoutPattern === "matrix-9" || layoutPattern === "single-row") {
+        if (layoutPattern === "loose-row" || layoutPattern === "single-row") {
           return Math.round(clamp(viewportWidth * 0.24 + (seed % 120), 300, 520));
         }
         if (layoutPattern === "big-with-group") {
@@ -1530,7 +1727,7 @@
 
         if (layoutPattern === "constellation") {
           range = index % 4 === 0 ? medium : tiny;
-        } else if (layoutPattern === "matrix-9") {
+        } else if (layoutPattern === "loose-row") {
           range = [110, 170];
         } else if (layoutPattern === "single-row") {
           range = [180, 260];
@@ -1580,7 +1777,7 @@
         }
         const count = Math.max(1, Number(item.__groupCount || item.__groupItems?.length || 1));
         if (item.__groupLayout === "column") {
-          return count === 3 ? 1.86 : 1.34;
+          return count === 3 ? 2.18 : 1.56;
         }
         if (item.__groupLayout?.startsWith("stair")) {
           return count === 3 ? 0.92 : 0.76;
@@ -1658,10 +1855,11 @@
           const start = (viewportWidth - totalWidth) / 2;
           return clamp(Math.round(start + role * (itemWidth + itemGap)), margin, maxLeft);
         }
-        if (layoutPattern === "matrix-9") {
-          const column = index % 9;
+        if (layoutPattern === "loose-row") {
+          const rowCount = getLooseRowColumnCount(sectionIndex);
+          const column = index % rowCount;
           const gridGap = 28;
-          const totalWidth = itemWidth * 9 + gridGap * 8;
+          const totalWidth = itemWidth * rowCount + gridGap * (rowCount - 1);
           const start = (viewportWidth - totalWidth) / 2;
           return clamp(Math.round(start + column * (itemWidth + gridGap)), margin, maxLeft);
         }
@@ -1725,9 +1923,8 @@
         if (layoutPattern === "center-max-triplet") {
           return Math.round((index % 3) * 10) + jitter * 0.25;
         }
-        if (layoutPattern === "matrix-9") {
-          const row = Math.floor(index / 9);
-          return row * (itemHeight + 28) + jitter * 0.08;
+        if (layoutPattern === "loose-row") {
+          return Math.round((index % 3) * 6) + jitter * 0.08;
         }
         if (layoutPattern === "single-row") {
           return Math.round((index % 3) * 8) + jitter * 0.2;
@@ -1735,7 +1932,7 @@
         return jitter;
       }
 
-      function getFlowStep({ index, seed, itemHeight, layoutPattern }) {
+      function getFlowStep({ index, seed, itemHeight, layoutPattern, sectionIndex = 0 }) {
         if (layoutPattern === "constellation") {
           return Math.round(itemHeight * 0.42) + ((Math.floor(seed / 1089000)) % 80);
         }
@@ -1783,8 +1980,9 @@
             ? Math.round(itemHeight * 0.82) + ((Math.floor(seed / 1089000)) % 120)
             : Math.round(itemHeight * 0.1);
         }
-        if (layoutPattern === "matrix-9") {
-          return index % 9 === 8
+        if (layoutPattern === "loose-row") {
+          const rowCount = getLooseRowColumnCount(sectionIndex);
+          return index % rowCount === rowCount - 1
             ? Math.round(itemHeight * 0.72)
             : Math.round(itemHeight * 0.04);
         }
@@ -1800,6 +1998,7 @@
       function relayoutFlowItems() {
         flowNextY = 0;
         flowPlacedRects.length = 0;
+        flowPlacedItems.length = 0;
         flowSectionLayouts.clear();
         clearFlowSectionGuides();
         infiniteFeedEl.style.minHeight = "";
@@ -1819,8 +2018,8 @@
       }
 
       async function appendFlowItems(count, options = {}) {
-        if (isFlowAppending || displayMode !== "flow") {
-          if (cacheImageItems.length > 0 || hasEmergencyFlowPool()) {
+        if (isFlowAppending || !isFeedDisplayMode()) {
+          if (cacheImageItems.length > 0) {
             extendFlowLoadingBuffer();
           }
           return;
@@ -1830,14 +2029,22 @@
           updateFlowLoader(`Waiting for first ${FLOW_FIRST_DISPLAY_COUNT} images ${cacheImageItems.length}/${FLOW_FIRST_DISPLAY_COUNT}`, 74);
           return;
         }
+        const emergencyAtStart = cacheImageItems.length === 0 && shouldUseEmergencyFlow();
         isFlowAppending = true;
-        if (cacheImageItems.length > 0 || hasEmergencyFlowPool()) {
+        if (cacheImageItems.length > 0) {
           extendFlowLoadingBuffer();
         }
         updateFlowLoader("Adding images...");
         try {
           let appended = 0;
-          const targetAppendCount = options.exact ? count : getFlowAppendCount(count);
+          const targetAppendCount = emergencyAtStart
+            ? 1
+            : options.exact
+            ? count
+            : getFlowAppendCount(count);
+          if (targetAppendCount <= 0) {
+            return;
+          }
           while (appended < targetAppendCount) {
             let item = takeNextFlowItem();
             if (!item) {
@@ -1849,6 +2056,9 @@
               }
             }
             const element = buildFlowItemElement(item);
+            if (emergencyAtStart) {
+              offsetEmergencyFlowElement(element);
+            }
             if (infiniteFeedEl.querySelectorAll(".infinite-feed-item").length < FLOW_FIRST_DISPLAY_COUNT) {
               element.dataset.initialReveal = "true";
               element.style.animationDelay = `${appended * 120}ms`;
@@ -1864,13 +2074,16 @@
         } finally {
           isFlowAppending = false;
           updateFlowLoader();
-          if (getScrollRemainingPx() < FLOW_AHEAD_PX * 1.25 && (cacheImageItems.length > 0 || hasEmergencyFlowPool())) {
+          if (displayMode === "flow" && getScrollRemainingPx() < FLOW_AHEAD_PX * 1.25 && (cacheImageItems.length > 0 || shouldUseEmergencyFlow())) {
             window.requestAnimationFrame(() => maintainInfiniteFeed());
           }
         }
       }
 
       function getFlowAppendCount(requestedCount) {
+        if (displayMode === "list") {
+          return Math.max(0, getListTargetCount() - infiniteFeedEl.querySelectorAll(".infinite-feed-item").length);
+        }
         if (isMobileViewport()) {
           return requestedCount;
         }
@@ -1880,6 +2093,14 @@
           ? sectionInfo.itemCount
           : sectionInfo.itemCount - sectionInfo.itemIndex;
         return Math.max(requestedCount, itemsToSectionEnd);
+      }
+
+      function getListTargetCount() {
+        const frameWidth = Math.max(320, (window.innerWidth || 960) * 0.92);
+        const frameHeight = Math.max(320, (window.innerHeight || 720) * 0.92);
+        const columns = Math.max(2, Math.floor(frameWidth / LIST_GRID_MIN_CELL_PX));
+        const rows = Math.max(2, Math.floor(frameHeight / LIST_GRID_ROW_HEIGHT_PX));
+        return Math.max(4, Math.min(48, columns * rows));
       }
 
       function getScrollRemainingPx() {
@@ -1893,15 +2114,34 @@
         return docHeight - (scrollTop + viewportHeight);
       }
 
+      function getFlowContentRemainingPx() {
+        if (displayMode === "list") {
+          return getScrollRemainingPx();
+        }
+        if (isMobileViewport()) {
+          return getScrollRemainingPx();
+        }
+        const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
+        const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+        return flowNextY - (scrollTop + viewportHeight);
+      }
+
       function maintainInfiniteFeed() {
-        if (displayMode !== "flow") {
+        if (!isFeedDisplayMode()) {
+          return;
+        }
+        if (displayMode === "list") {
+          const missingCount = getListTargetCount() - infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
+          if (missingCount > 0 && !isFlowAppending) {
+            appendFlowItems(missingCount, { exact: true });
+          }
           return;
         }
         if (!infiniteFeedEl.children.length && cacheImageItems.length < FLOW_FIRST_DISPLAY_COUNT) {
           ensureCacheStock();
           return;
         }
-        if (getScrollRemainingPx() < FLOW_AHEAD_PX * 1.4 && (cacheImageItems.length > 0 || hasEmergencyFlowPool())) {
+        if (getScrollRemainingPx() < FLOW_AHEAD_PX * 1.4 && cacheImageItems.length > 0) {
           extendFlowLoadingBuffer();
         }
         if (isFlowAppending) {
@@ -1914,6 +2154,22 @@
           if (cacheImageItems.length === 0 && !shouldUseEmergencyFlow()) {
             break;
           }
+        }
+      }
+
+      async function prefillFlowAhead(maxRounds = 3) {
+        if (!isFeedDisplayMode()) {
+          return;
+        }
+        for (let round = 0; round < maxRounds; round += 1) {
+          if (getScrollRemainingPx() >= FLOW_AHEAD_PX) {
+            break;
+          }
+          if (cacheImageItems.length === 0 && !shouldUseEmergencyFlow()) {
+            ensureCacheStock();
+            break;
+          }
+          await appendFlowItems(FLOW_APPEND_BATCH);
         }
       }
 
@@ -1942,10 +2198,26 @@
         }
         if (!infiniteFeedEl.children.length) {
           await appendFlowItems(FLOW_FIRST_DISPLAY_COUNT, { exact: true });
+          await prefillFlowAhead();
           window.requestAnimationFrame(() => maintainInfiniteFeed());
           return;
         }
         maintainInfiniteFeed();
+      }
+
+      async function startListMode() {
+        relayoutFlowItems();
+        const targetCount = getListTargetCount();
+        if (!infiniteFeedEl.children.length && cacheImageItems.length < Math.min(FLOW_FIRST_DISPLAY_COUNT, targetCount)) {
+          ensureCacheStock();
+          updateFlowLoader(`Waiting for list images ${cacheImageItems.length}/${targetCount}`, 74);
+          return;
+        }
+        const missingCount = targetCount - infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
+        if (missingCount > 0) {
+          await appendFlowItems(missingCount, { exact: true });
+          return;
+        }
       }
 
       async function startWallMode() {
@@ -1956,7 +2228,7 @@
         await placeRec1();
         let anchorRec = rec1El;
         for (let index = 1; index < INITIAL_PLACE_COUNT; index += 1) {
-          await createNextRec(anchorRec);
+          await createNextRec(anchorRec, { count: 1, avoidExisting: true, small: true });
           const recs = wallEl.querySelectorAll(".bounding-box");
           anchorRec = recs[recs.length - 1] || anchorRec;
         }
@@ -2000,15 +2272,23 @@
         });
       }
 
-      function queueAspectPrefetch() {
-        const candidates = cacheImageItems.filter((item) => item?.imageUrl && !queuedAspectUrls.has(item.imageUrl));
-        const imageItem = getRandomFrom(candidates.length ? candidates : cacheImageItems);
-        if (!imageItem) {
+      function takeNextWallImageItem() {
+        const freshItem = takeNextFreshFlowItem();
+        if (freshItem) {
+          return freshItem;
+        }
+        const historyPool = flowHistoryItems.filter((item) => item?.imageUrl);
+        const picked = getRandomFrom(historyPool);
+        return picked ? cloneFlowItem(picked, { repeatKind: "wall-repeat" }) : null;
+      }
+
+      function loadWallImagePayload(imageItem) {
+        if (!imageItem?.imageUrl) {
           return Promise.resolve(null);
         }
         queuedAspectUrls.add(imageItem.imageUrl);
         const imageUrl = buildImageProxyUrl(imageItem.imageUrl);
-        const promise = new Promise((resolve) => {
+        return new Promise((resolve) => {
           const img = new Image();
           img.onload = () =>
             resolve({
@@ -2021,10 +2301,16 @@
             });
           img.onerror = () => resolve(null);
           img.src = imageUrl;
-        }).catch(() => null);
+        }).finally(() => {
+          queuedAspectUrls.delete(imageItem.imageUrl);
+        });
+      }
+
+      function queueAspectPrefetch() {
+        const imageItem = takeNextWallImageItem();
+        const promise = loadWallImagePayload(imageItem).catch(() => null);
 
         promise.then((result) => {
-          queuedAspectUrls.delete(imageItem.imageUrl);
           const queueIndex = aspectQueue.indexOf(promise);
           if (queueIndex >= 0) {
             aspectQueue.splice(queueIndex, 1);
@@ -2075,8 +2361,10 @@
       function pickSizeOffset() {
         const options = [
           { label: "L", offset: 140 },
-          { label: "M", offset: 200 },
           { label: "S", offset: 260 },
+          { label: "S", offset: 300 },
+          { label: "XS", offset: 360 },
+          { label: "XS", offset: 420 },
         ];
         return options[Math.floor(Math.random() * options.length)];
       }
@@ -2085,8 +2373,8 @@
         return {
           x: wallPadding,
           y: wallPadding,
-          width: wallRect.width - wallPadding * 2,
-          height: wallRect.height - wallPadding * 2,
+          width: Math.max(WALL_MIN_REC_SIZE_PX, wallRect.width - wallPadding * 2),
+          height: Math.max(WALL_MIN_REC_SIZE_PX, wallRect.height - wallPadding * 2),
         };
       }
 
@@ -2146,7 +2434,72 @@
         );
       }
 
-      async function placeRecInFrame(frameRect, recEl, recLabel, sizeOffset) {
+      function findWallPlacement(frameRect, recWidth, recHeight, avoidRects) {
+        const recHalfWidth = recWidth / 2;
+        const recHalfHeight = recHeight / 2;
+        const centerMinX = frameRect.x + recHalfWidth;
+        const centerMaxX = frameRect.x + frameRect.width - recHalfWidth;
+        const centerMinY = frameRect.y + recHalfHeight;
+        const centerMaxY = frameRect.y + frameRect.height - recHalfHeight;
+        if (centerMaxX < centerMinX || centerMaxY < centerMinY) {
+          return null;
+        }
+
+        const collisionGap = 18;
+        const buildCandidate = (centerX, centerY) => {
+          const left = clamp(centerX - recHalfWidth, frameRect.x, frameRect.x + frameRect.width - recWidth);
+          const top = clamp(centerY - recHalfHeight, frameRect.y, frameRect.y + frameRect.height - recHeight);
+          const collisionRect = {
+            x: left - collisionGap,
+            y: top - collisionGap,
+            width: recWidth + collisionGap * 2,
+            height: recHeight + collisionGap * 2,
+          };
+          return { left, top, collisionRect };
+        };
+        const canUse = (candidate) => !avoidRects.some((rect) => rectanglesOverlap(candidate.collisionRect, rect));
+
+        if (avoidRects.length === 0) {
+          const centerX = frameRect.x + frameRect.width / 2;
+          const centerY = frameRect.y + frameRect.height / 2;
+          const candidate = buildCandidate(centerX, centerY);
+          return { left: candidate.left, top: candidate.top };
+        }
+
+        for (let attempt = 0; attempt < WALL_SLOT_RANDOM_ATTEMPTS; attempt += 1) {
+          const centerX = randomBetween(centerMinX, centerMaxX);
+          const centerY = randomBetween(centerMinY, centerMaxY);
+          const candidate = buildCandidate(centerX, centerY);
+          if (canUse(candidate)) {
+            return { left: candidate.left, top: candidate.top };
+          }
+        }
+
+        const xSteps = Math.max(2, WALL_SLOT_GRID_STEPS);
+        const ySteps = Math.max(2, WALL_SLOT_GRID_STEPS);
+        const candidates = [];
+        for (let yIndex = 0; yIndex < ySteps; yIndex += 1) {
+          for (let xIndex = 0; xIndex < xSteps; xIndex += 1) {
+            const xRatio = xSteps === 1 ? 0.5 : xIndex / (xSteps - 1);
+            const yRatio = ySteps === 1 ? 0.5 : yIndex / (ySteps - 1);
+            candidates.push(buildCandidate(
+              centerMinX + (centerMaxX - centerMinX) * xRatio,
+              centerMinY + (centerMaxY - centerMinY) * yRatio,
+            ));
+          }
+        }
+        candidates.sort((a, b) => {
+          const frameCenterX = frameRect.x + frameRect.width / 2;
+          const frameCenterY = frameRect.y + frameRect.height / 2;
+          const aDistance = Math.hypot(a.left + recHalfWidth - frameCenterX, a.top + recHalfHeight - frameCenterY);
+          const bDistance = Math.hypot(b.left + recHalfWidth - frameCenterX, b.top + recHalfHeight - frameCenterY);
+          return aDistance - bDistance;
+        });
+        const candidate = candidates.find(canUse);
+        return candidate ? { left: candidate.left, top: candidate.top } : null;
+      }
+
+      async function placeRecInFrame(frameRect, recEl, recLabel, sizeOffset, avoidRects = []) {
         const aspectPayload = await getNextAspect();
         if (!aspectPayload) {
           recEl.dataset.ready = "false";
@@ -2155,42 +2508,29 @@
         const { width, height, imageUrl, sourceUrl, sourcePageUrl, img } = aspectPayload;
         const recAspect = width / height;
         const squareSize = Math.max(
-          80,
+          WALL_MIN_REC_SIZE_PX,
           Math.min(frameRect.width, frameRect.height) - sizeOffset,
         );
         const recSize = buildRecSizeFromSquare(squareSize, recAspect);
 
         const recWidth = Math.min(recSize.width, frameRect.width);
         const recHeight = Math.min(recSize.height, frameRect.height);
-        const recHalfWidth = recWidth / 2;
-        const recHalfHeight = recHeight / 2;
-
-        const centerMinX = frameRect.x + recHalfWidth;
-        const centerMaxX = frameRect.x + frameRect.width - recHalfWidth;
-        const centerMinY = frameRect.y + recHalfHeight;
-        const centerMaxY = frameRect.y + frameRect.height - recHalfHeight;
-
-        const centerX =
-          centerMaxX <= centerMinX
-            ? frameRect.x + frameRect.width / 2
-            : randomBetween(centerMinX, centerMaxX);
-        const centerY =
-          centerMaxY <= centerMinY
-            ? frameRect.y + frameRect.height / 2
-            : randomBetween(centerMinY, centerMaxY);
-
-        const recLeft = centerX - recHalfWidth;
-        const recTop = centerY - recHalfHeight;
+        const placement = findWallPlacement(frameRect, recWidth, recHeight, avoidRects);
+        if (!placement) {
+          recEl.dataset.ready = "false";
+          return;
+        }
 
         recEl.style.width = `${recWidth}px`;
         recEl.style.height = `${recHeight}px`;
-        recEl.style.left = `${recLeft}px`;
-        recEl.style.top = `${recTop}px`;
+        recEl.style.left = `${placement.left}px`;
+        recEl.style.top = `${placement.top}px`;
         recEl.style.backgroundImage = `url("${(img && img.src) || imageUrl}")`;
         recEl.style.backgroundSize = "cover";
         recEl.style.backgroundPosition = "center";
         recEl.style.border = "none";
         recEl.style.boxShadow = "none";
+        recEl.style.outline = "none";
         recEl.style.display = "grid";
         recEl.textContent = "";
         recEl.dataset.imageUrl = sourceUrl || "";
@@ -2216,7 +2556,7 @@
         refreshLocalStats();
       }
 
-      async function createNextRec(fromRecEl) {
+      async function createNextRec(fromRecEl, options = {}) {
         if (isPlacing) {
           return;
         }
@@ -2225,42 +2565,80 @@
           const wallRect = wallEl.getBoundingClientRect();
           const wallPadding = 32;
           const innerFrame = getInnerWallFrame(wallRect, wallPadding);
-          const fromRecRect = getRecRect(fromRecEl);
-          const largeVoid = getLargestVoid(innerFrame, fromRecRect);
+          const existingRecs = Array.from(wallEl.querySelectorAll('.bounding-box[data-ready="true"]'))
+            .filter((rec) => rec !== fromRecEl)
+            .filter((rec) => rec.dataset.wallExiting !== "true");
+          const protectedRects = fromRecEl?.dataset.ready === "true" ? [getRecRect(fromRecEl)] : [];
+          const newRects = [];
+          const pendingEntrances = [];
+          const fallbackRemoveRecs = [];
+          const targetCount = Math.max(1, Number(options.count || 1));
 
-          const nextIndex = recCount + 1;
-          const nextRecEl = document.createElement("div");
-          nextRecEl.className = "bounding-box";
-          wallEl.appendChild(nextRecEl);
+          for (let createIndex = 0; createIndex < targetCount; createIndex += 1) {
+            const nextIndex = recCount + 1;
+            const nextRecEl = document.createElement("div");
+            nextRecEl.className = "bounding-box";
+            nextRecEl.dataset.wallReveal = "true";
+            wallEl.appendChild(nextRecEl);
 
-          const picked = pickSizeOffset();
-          await placeRecInFrame(largeVoid, nextRecEl, String(nextIndex), picked.offset);
-          if (nextRecEl.dataset.ready !== "true") {
-            nextRecEl.remove();
-            return;
-          }
-          recCount = nextIndex;
-
-          if (removeUnderMode) {
-            const newRect = getRecRect(nextRecEl);
-            const existing = Array.from(wallEl.querySelectorAll(".bounding-box")).filter(
-              (rec) => rec !== nextRecEl,
-            );
-            existing.forEach((rec) => {
-              const recRect = getRecRect(rec);
-              if (rectanglesOverlap(newRect, recRect)) {
-                rec.remove();
+            const picked = pickSizeOffset();
+            const sizeOffsets = options.small
+              ? [420, 500, 560, 620, 360, 300]
+              : Array.from(new Set([picked.offset, 300, 360, 420, 500, 560, 620]));
+            for (const sizeOffset of sizeOffsets) {
+              const avoidRects = options.removeOverlaps
+                ? protectedRects.concat(newRects)
+                : options.avoidExisting
+                ? protectedRects.concat(existingRecs.map((rec) => getRecRect(rec)), newRects)
+                : existingRecs.map((rec) => getRecRect(rec)).concat(newRects);
+              await placeRecInFrame(innerFrame, nextRecEl, String(nextIndex), sizeOffset, avoidRects);
+              if (nextRecEl.dataset.ready === "true") {
+                break;
               }
+            }
+            if (nextRecEl.dataset.ready !== "true" && options.removeOverlaps && fromRecEl?.dataset.ready === "true") {
+              const fallbackOffsets = [620, 560, 500, 420, 360, 300];
+              for (const sizeOffset of fallbackOffsets) {
+                await placeRecInFrame(innerFrame, nextRecEl, String(nextIndex), sizeOffset, newRects);
+                if (nextRecEl.dataset.ready === "true") {
+                  fallbackRemoveRecs.push(fromRecEl);
+                  break;
+                }
+              }
+            }
+            if (nextRecEl.dataset.ready !== "true") {
+              nextRecEl.remove();
+              continue;
+            }
+            nextRecEl.style.opacity = "0";
+            recCount = nextIndex;
+            newRects.push(getRecRect(nextRecEl));
+            pendingEntrances.push(nextRecEl);
+
+            nextRecEl.addEventListener("click", () => {
+              handleRecClick(nextRecEl);
+            });
+            nextRecEl.addEventListener("contextmenu", (event) => {
+              openRecPageOnRightClick(event, nextRecEl);
             });
           }
 
-          nextRecEl.addEventListener("click", () => {
-            handleRecClick(nextRecEl);
+          if (options.removeOverlaps && newRects.length > 0) {
+            const overlappedRecs = existingRecs.filter((rec) => {
+              const rect = getRecRect(rec);
+              return newRects.some((newRect) => rectanglesOverlap(newRect, rect));
+            });
+            const recsToRemove = Array.from(new Set(overlappedRecs.concat(fallbackRemoveRecs)));
+            await Promise.all(recsToRemove.map((rec) => removeWallRec(rec)));
+          }
+
+          pendingEntrances.forEach((rec) => {
+            rec.style.opacity = "";
+            animateWallRecEnter(rec);
           });
-          nextRecEl.addEventListener("contextmenu", (event) => {
-            openRecPageOnRightClick(event, nextRecEl);
-          });
+
           refreshLocalStats();
+          updateAutoMode();
         } finally {
           isPlacing = false;
         }
@@ -2300,12 +2678,64 @@
         fillAspectQueue();
       }
 
+      function animateWallRecExit(recEl) {
+        return new Promise((resolve) => {
+          if (!recEl || recEl.dataset.ready !== "true") {
+            resolve();
+            return;
+          }
+          recEl.dataset.wallExiting = "true";
+          const animation = recEl.animate(
+            [
+              { opacity: 1, transform: "scale(1)", filter: "blur(0)" },
+              { opacity: 0, transform: "scale(1.08)", filter: "blur(10px)" },
+            ],
+            {
+              duration: 900,
+              easing: "cubic-bezier(0.4, 0, 0.2, 1)",
+              fill: "forwards",
+            },
+          );
+          animation.addEventListener("finish", () => {
+            resolve();
+          }, { once: true });
+        });
+      }
+
+      function animateWallRecEnter(recEl) {
+        if (!recEl || recEl.dataset.ready !== "true") {
+          return;
+        }
+        recEl.animate(
+          [
+            { opacity: 0, transform: "scale(0.82)" },
+            { opacity: 1, transform: "scale(1.035)", offset: 0.72 },
+            { opacity: 1, transform: "scale(1)" },
+          ],
+          {
+            duration: 960,
+            easing: "cubic-bezier(0.18, 0.86, 0.24, 1)",
+          },
+        );
+      }
+
+      async function removeWallRec(recEl) {
+        await animateWallRecExit(recEl);
+        if (recEl !== rec1El) {
+          recEl.remove();
+        } else {
+          recEl.dataset.ready = "false";
+          recEl.dataset.wallExiting = "false";
+          recEl.style.display = "none";
+        }
+      }
+
       async function handleRecClick(recEl) {
         if (displayMode !== "wall") {
           return;
         }
-        consumeClickedImage(recEl);
-        await createNextRec(recEl);
+        const nextCount = 1 + (Math.random() < 0.35 ? 0 : 1);
+        await createNextRec(recEl, { count: nextCount, removeOverlaps: true, small: nextCount === 2 });
         ensureCacheStock();
       }
 
@@ -2340,6 +2770,12 @@
         settingsDotEl.click();
       });
 
+      conceptToggleInput.addEventListener("change", () => {
+        conceptPanelEl.hidden = !conceptToggleInput.checked;
+        conceptToggleInput.setAttribute("aria-expanded", String(conceptToggleInput.checked));
+        updateSettingsStates();
+      });
+
       backgroundFilterInput.addEventListener("change", () => {
         saveLocalSettings();
         updateSettingsStates();
@@ -2355,7 +2791,7 @@
         saveLocalSettings();
         updateSettingsStates();
         updateLayoutDebugMode();
-        if (displayMode === "flow") {
+        if (isFeedDisplayMode()) {
           relayoutFlowItems();
         }
       });
@@ -2366,10 +2802,11 @@
         updateAutoScrollMode();
       });
 
-      wallModeInput.addEventListener("change", () => {
-        saveLocalSettings();
-        updateSettingsStates();
-        setDisplayMode(wallModeInput.checked ? "wall" : "flow");
+      displayModeInput.addEventListener("change", () => {
+        const currentIndex = DISPLAY_MODES.indexOf(displayMode);
+        const nextMode = DISPLAY_MODES[(currentIndex + 1) % DISPLAY_MODES.length] || "flow";
+        displayModeInput.checked = false;
+        setDisplayMode(nextMode);
       });
 
       document.addEventListener("keydown", (event) => {
@@ -2386,7 +2823,7 @@
       }, { passive: true });
 
       window.addEventListener("resize", () => {
-        if (displayMode === "flow") {
+        if (isFeedDisplayMode()) {
           relayoutFlowItems();
         }
         maintainInfiniteFeed();
@@ -2422,6 +2859,10 @@
           if (displayMode === "flow") {
             updateFlowLoader("Composing first layout...", 82);
             await startFlowMode();
+          } else if (displayMode === "list") {
+            updateFlowLoader("Composing list...", 82);
+            await startListMode();
+            ensureCacheStock();
           } else {
             fillAspectQueue();
             updateFlowLoader("Placing first image...", 82);
@@ -2429,7 +2870,7 @@
             let anchorRec = rec1El;
             for (let index = 1; index < INITIAL_PLACE_COUNT; index += 1) {
               updateFlowLoader(`Placing images ${index + 1}/${INITIAL_PLACE_COUNT}`, 82 + Math.round((index / INITIAL_PLACE_COUNT) * 12));
-              await createNextRec(anchorRec);
+              await createNextRec(anchorRec, { count: 1, avoidExisting: true, small: true });
               const recs = wallEl.querySelectorAll(".bounding-box");
               anchorRec = recs[recs.length - 1] || anchorRec;
             }
@@ -2456,7 +2897,7 @@
 
       window.addEventListener("load", async () => {
         loadLocalSettings();
-        setDisplayMode(wallModeInput.checked ? "wall" : "flow", false);
+        setDisplayMode(displayMode, false);
         updateSettingsStates();
         updateLayoutDebugMode();
         if (categoryDataInput) {
