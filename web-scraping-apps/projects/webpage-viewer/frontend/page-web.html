@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Webpage Image Viewer</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body data-page-mode="b" data-page-key="web">
+    <div id="settings-dot" class="settings-dot" role="button" tabindex="0" aria-label="Open settings" aria-expanded="false" aria-controls="settings-panel"></div>
+    <aside id="settings-panel" class="settings-panel" hidden></aside>
+
+    <main class="app-shell">
+      <section
+        id="gallery"
+        class="gallery"
+        aria-label="Wall surface"
+        style="width:100vw;margin-left:calc(50% - 50vw);display:flex;justify-content:center;"
+      >
+        <section
+          id="wall-surface"
+          class="wall-surface"
+          style="position:relative;width:clamp(320px,92vw,1400px);min-height:70vh;border:none;background:transparent;overflow:hidden;"
+        >
+          <div id="bounding-box" class="bounding-box"></div>
+        </section>
+      </section>
+
+      <section class="e-lab">
+        <form id="fetch-form" class="fetch-form">
+          <label>
+            <span>Target Webpage URL</span>
+            <input id="url-input" name="url" type="url" value="https://www.monotaro.com/" placeholder="https://example.com/page" required />
+          </label>
+          <div class="input-grid">
+            <label>
+              <span>Filter Tag (temporary)</span>
+              <input id="tag-input" name="tag" type="text" value="#dailyinput" />
+            </label>
+            <label>
+              <span>Cookie / Session (optional)</span>
+              <input id="sid-input" name="sid" type="password" placeholder="Used for authenticated pages" />
+            </label>
+          </div>
+
+          <p class="meta">Basic Crawl Settings</p>
+          <div class="input-grid web-settings-grid">
+            <label>
+              <span>Follow Scope</span>
+              <select id="follow-scope-input" name="follow_scope">
+                <option value="same-domain">Same Domain Only</option>
+                <option value="subpath">Subpath Only</option>
+                <option value="any-link">Any Link</option>
+              </select>
+            </label>
+            <label>
+              <span>Path Prefix (optional)</span>
+              <input id="path-prefix-input" name="path_prefix" type="text" placeholder="/catalog/" />
+            </label>
+            <label>
+              <span>Max Depth</span>
+              <input id="max-depth-input" name="max_depth" type="number" min="0" max="5" value="1" />
+            </label>
+            <label>
+              <span>Max Pages</span>
+              <input id="max-pages-input" name="max_pages" type="number" min="1" max="2000" value="120" />
+            </label>
+            <label>
+              <span>Item Selector (optional)</span>
+              <input id="item-selector-input" name="item_selector" type="text" placeholder=".product-card img" />
+            </label>
+            <label>
+              <span>Next Link Selector (optional)</span>
+              <input id="next-selector-input" name="next_selector" type="text" placeholder="a[rel='next']" />
+            </label>
+          </div>
+
+          <details class="web-advanced">
+            <summary>Advanced Settings</summary>
+            <div class="input-grid web-settings-grid">
+              <label>
+                <span>Include URL Pattern (optional)</span>
+                <input id="include-pattern-input" name="include_pattern" type="text" placeholder="/p/" />
+              </label>
+              <label>
+                <span>Exclude URL Pattern (optional)</span>
+                <input id="exclude-pattern-input" name="exclude_pattern" type="text" placeholder="/review/" />
+              </label>
+              <label>
+                <span>Delay (ms)</span>
+                <input id="delay-ms-input" name="delay_ms" type="number" min="0" max="5000" value="180" />
+              </label>
+              <label>
+                <span>Concurrency</span>
+                <input id="concurrency-input" name="concurrency" type="number" min="1" max="12" value="3" />
+              </label>
+              <label>
+                <span>Dedup Key</span>
+                <select id="dedup-key-input" name="dedup_key">
+                  <option value="url">URL</option>
+                  <option value="slug">Slug</option>
+                  <option value="title">Title</option>
+                </select>
+              </label>
+              <label>
+                <span>Output Fields</span>
+                <input id="output-fields-input" name="output_fields" type="text" value="title,price,image,url" />
+              </label>
+            </div>
+          </details>
+          <button id="submit-button" type="submit">Load Images</button>
+        </form>
+        <div class="e-lab-header">
+          <p id="status" class="meta">No images loaded yet.</p>
+          <a id="reroll-button" href="#" class="e-reroll-button">Reroll Rec1</a>
+        </div>
+      </section>
+
+      <nav class="page-nav" aria-label="View pages">
+        <a class="page-nav-link" href="./index.html">A Page</a>
+        <a class="page-nav-link is-current" href="./page-web.html">Web Page</a>
+      </nav>
+    </main>
+
+    <script>
+      const wallEl = document.getElementById("wall-surface");
+      const rec1El = document.getElementById("bounding-box");
+      const rerollButton = document.getElementById("reroll-button");
+      const form = document.getElementById("fetch-form");
+      const urlInput = document.getElementById("url-input");
+      const tagInput = document.getElementById("tag-input");
+      const sidInput = document.getElementById("sid-input");
+      const followScopeInput = document.getElementById("follow-scope-input");
+      const pathPrefixInput = document.getElementById("path-prefix-input");
+      const maxDepthInput = document.getElementById("max-depth-input");
+      const maxPagesInput = document.getElementById("max-pages-input");
+      const itemSelectorInput = document.getElementById("item-selector-input");
+      const nextSelectorInput = document.getElementById("next-selector-input");
+      const includePatternInput = document.getElementById("include-pattern-input");
+      const excludePatternInput = document.getElementById("exclude-pattern-input");
+      const delayMsInput = document.getElementById("delay-ms-input");
+      const concurrencyInput = document.getElementById("concurrency-input");
+      const dedupKeyInput = document.getElementById("dedup-key-input");
+      const outputFieldsInput = document.getElementById("output-fields-input");
+      const statusEl = document.getElementById("status");
+      const settingsDotEl = document.getElementById("settings-dot");
+      const settingsPanelEl = document.getElementById("settings-panel");
+
+      const API_BASE = "";
+      let recCount = 1;
+      let imageItems = [];
+      let isPlacing = false;
+      let removeUnderMode = true;
+      const PREFETCH_COUNT = 10;
+      const aspectQueue = [];
+      const readyAspects = [];
+
+      function randomBetween(min, max) {
+        return min + Math.random() * (max - min);
+      }
+
+      function flattenImages(pages) {
+        return (pages || []).flatMap((page) =>
+          (Array.isArray(page.image_items) && page.image_items.length > 0
+            ? page.image_items
+            : (page.images || []).map((url) => ({ url, context: "" }))).map((imageItem, index) => ({
+            id: `${page.title}-${index}-${imageItem.url}`,
+            imageUrl: imageItem.url,
+          })),
+        );
+      }
+
+      function buildImageProxyUrl(imageUrl) {
+        const query = new URLSearchParams({
+          url: imageUrl,
+          sid: sidInput.value.trim(),
+        });
+        return `${API_BASE}/api/image?${query.toString()}`;
+      }
+
+
+      async function fetchJson(url) {
+        const response = await fetch(`${API_BASE}${url}`);
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to load images.");
+        }
+        return data;
+      }
+
+      function pickRandomImage() {
+        if (!imageItems.length) {
+          return null;
+        }
+        return imageItems[Math.floor(Math.random() * imageItems.length)];
+      }
+
+      function loadImageAspect(url) {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+          img.onerror = () => reject(new Error("Failed to load image"));
+          img.src = url;
+        });
+      }
+
+      function queueAspectPrefetch() {
+        const imageItem = pickRandomImage();
+        if (!imageItem) {
+          return Promise.resolve(null);
+        }
+        const imageUrl = buildImageProxyUrl(imageItem.imageUrl);
+        const promise = new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () =>
+            resolve({
+              width: img.naturalWidth,
+              height: img.naturalHeight,
+              imageUrl,
+              img,
+            });
+          img.onerror = () => resolve(null);
+          img.src = imageUrl;
+        }).catch(() => null);
+
+        promise.then((result) => {
+          if (result) {
+            readyAspects.push(result);
+          }
+        });
+        return promise;
+      }
+
+      function fillAspectQueue() {
+        while (aspectQueue.length < PREFETCH_COUNT) {
+          aspectQueue.push(queueAspectPrefetch());
+        }
+      }
+
+      async function getNextAspect() {
+        fillAspectQueue();
+        if (readyAspects.length > 0) {
+          return readyAspects.shift();
+        }
+        const nextPromise = aspectQueue.shift();
+        const result = await nextPromise;
+        fillAspectQueue();
+        return result;
+      }
+
+      function buildRecSizeFromSquare(squareSize, recAspect) {
+        if (recAspect >= 1) {
+          return {
+            width: squareSize,
+            height: squareSize / recAspect,
+          };
+        }
+        return {
+          width: squareSize * recAspect,
+          height: squareSize,
+        };
+      }
+
+      function pickSizeOffset() {
+        const options = [
+          { label: "L", offset: 140 },
+          { label: "M", offset: 200 },
+          { label: "S", offset: 260 },
+        ];
+        return options[Math.floor(Math.random() * options.length)];
+      }
+
+      function getInnerWallFrame(wallRect, wallPadding) {
+        return {
+          x: wallPadding,
+          y: wallPadding,
+          width: wallRect.width - wallPadding * 2,
+          height: wallRect.height - wallPadding * 2,
+        };
+      }
+
+      function getRecRect(recEl) {
+        return {
+          x: Number.parseFloat(recEl.style.left || "0"),
+          y: Number.parseFloat(recEl.style.top || "0"),
+          width: recEl.offsetWidth,
+          height: recEl.offsetHeight,
+        };
+      }
+
+      function getLargestVoid(frameRect, recRect) {
+        const topVoid = {
+          x: frameRect.x,
+          y: frameRect.y,
+          width: frameRect.width,
+          height: Math.max(0, recRect.y - frameRect.y),
+        };
+        const bottomVoid = {
+          x: frameRect.x,
+          y: recRect.y + recRect.height,
+          width: frameRect.width,
+          height: Math.max(0, frameRect.y + frameRect.height - (recRect.y + recRect.height)),
+        };
+        const leftVoid = {
+          x: frameRect.x,
+          y: frameRect.y,
+          width: Math.max(0, recRect.x - frameRect.x),
+          height: frameRect.height,
+        };
+        const rightVoid = {
+          x: recRect.x + recRect.width,
+          y: frameRect.y,
+          width: Math.max(0, frameRect.x + frameRect.width - (recRect.x + recRect.width)),
+          height: frameRect.height,
+        };
+        const voids = [topVoid, bottomVoid, leftVoid, rightVoid].filter(
+          (rect) => rect.width > 0 && rect.height > 0,
+        );
+        if (!voids.length) {
+          return frameRect;
+        }
+        return voids.reduce((largest, rect) => {
+          const area = rect.width * rect.height;
+          const largestArea = largest.width * largest.height;
+          return area > largestArea ? rect : largest;
+        }, voids[0]);
+      }
+
+      function rectanglesOverlap(a, b) {
+        return (
+          a.x < b.x + b.width &&
+          a.x + a.width > b.x &&
+          a.y < b.y + b.height &&
+          a.y + a.height > b.y
+        );
+      }
+
+      async function placeRecInFrame(frameRect, recEl, recLabel, sizeOffset) {
+        const aspectPayload = await getNextAspect();
+        if (!aspectPayload) {
+          return;
+        }
+        const { width, height, imageUrl, img } = aspectPayload;
+        const recAspect = width / height;
+        const squareSize = Math.max(
+          80,
+          Math.min(frameRect.width, frameRect.height) - sizeOffset,
+        );
+        const recSize = buildRecSizeFromSquare(squareSize, recAspect);
+
+        const recWidth = Math.min(recSize.width, frameRect.width);
+        const recHeight = Math.min(recSize.height, frameRect.height);
+        const recHalfWidth = recWidth / 2;
+        const recHalfHeight = recHeight / 2;
+
+        const centerMinX = frameRect.x + recHalfWidth;
+        const centerMaxX = frameRect.x + frameRect.width - recHalfWidth;
+        const centerMinY = frameRect.y + recHalfHeight;
+        const centerMaxY = frameRect.y + frameRect.height - recHalfHeight;
+
+        const centerX =
+          centerMaxX <= centerMinX
+            ? frameRect.x + frameRect.width / 2
+            : randomBetween(centerMinX, centerMaxX);
+        const centerY =
+          centerMaxY <= centerMinY
+            ? frameRect.y + frameRect.height / 2
+            : randomBetween(centerMinY, centerMaxY);
+
+        const recLeft = centerX - recHalfWidth;
+        const recTop = centerY - recHalfHeight;
+
+        recEl.style.width = `${recWidth}px`;
+        recEl.style.height = `${recHeight}px`;
+        recEl.style.left = `${recLeft}px`;
+        recEl.style.top = `${recTop}px`;
+        recEl.style.backgroundImage = `url("${(img && img.src) || imageUrl}")`;
+        recEl.style.backgroundSize = "cover";
+        recEl.style.backgroundPosition = "center";
+        recEl.style.border = "none";
+        recEl.style.boxShadow = "0 20px 36px rgba(0, 0, 0, 0.12)";
+        recEl.style.display = "grid";
+        recEl.textContent = "";
+      }
+
+      async function placeRec1() {
+        const wallRect = wallEl.getBoundingClientRect();
+        const wallPadding = 32;
+        const innerFrame = getInnerWallFrame(wallRect, wallPadding);
+
+        const existingRecs = Array.from(wallEl.querySelectorAll(".bounding-box"));
+        existingRecs.forEach((rec) => {
+          if (rec !== rec1El) {
+            rec.remove();
+          }
+        });
+        recCount = 1;
+
+        await placeRecInFrame(innerFrame, rec1El, "1", 24);
+      }
+
+      async function createNextRec(fromRecEl) {
+        if (isPlacing) {
+          return;
+        }
+        isPlacing = true;
+        try {
+          const wallRect = wallEl.getBoundingClientRect();
+          const wallPadding = 32;
+          const innerFrame = getInnerWallFrame(wallRect, wallPadding);
+          const fromRecRect = getRecRect(fromRecEl);
+          const largeVoid = getLargestVoid(innerFrame, fromRecRect);
+
+          const nextIndex = recCount + 1;
+          const nextRecEl = document.createElement("div");
+          nextRecEl.className = "bounding-box";
+          wallEl.appendChild(nextRecEl);
+
+          const picked = pickSizeOffset();
+          await placeRecInFrame(largeVoid, nextRecEl, String(nextIndex), picked.offset);
+          recCount = nextIndex;
+
+          if (removeUnderMode) {
+            const newRect = getRecRect(nextRecEl);
+            const existing = Array.from(wallEl.querySelectorAll(".bounding-box")).filter(
+              (rec) => rec !== nextRecEl,
+            );
+            existing.forEach((rec) => {
+              const recRect = getRecRect(rec);
+              if (rectanglesOverlap(newRect, recRect)) {
+                rec.remove();
+              }
+            });
+          }
+
+          nextRecEl.addEventListener("click", () => {
+            createNextRec(nextRecEl);
+          });
+        } finally {
+          isPlacing = false;
+        }
+      }
+
+      rec1El.addEventListener("click", () => {
+        createNextRec(rec1El);
+      });
+
+      rerollButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        placeRec1();
+      });
+
+      settingsDotEl.addEventListener("click", () => {
+        const shouldOpen = settingsPanelEl.hidden;
+        settingsPanelEl.hidden = !shouldOpen;
+        settingsDotEl.setAttribute("aria-expanded", String(shouldOpen));
+        document.body.dataset.settingsOpen = shouldOpen ? "true" : "false";
+      });
+
+      settingsDotEl.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") {
+          return;
+        }
+        event.preventDefault();
+        settingsDotEl.click();
+      });
+
+      async function loadImages() {
+        const url = urlInput.value.trim();
+        const tag = tagInput.value.trim() || "#dailyinput";
+        const sid = sidInput.value.trim();
+        const followScope = followScopeInput.value;
+        const pathPrefix = pathPrefixInput.value.trim();
+        const maxDepth = maxDepthInput.value;
+        const maxPages = maxPagesInput.value;
+        const itemSelector = itemSelectorInput.value.trim();
+        const nextSelector = nextSelectorInput.value.trim();
+        const includePattern = includePatternInput.value.trim();
+        const excludePattern = excludePatternInput.value.trim();
+        const delayMs = delayMsInput.value;
+        const concurrency = concurrencyInput.value;
+        const dedupKey = dedupKeyInput.value;
+        const outputFields = outputFieldsInput.value.trim();
+
+        if (!url) {
+          statusEl.textContent = "Enter a target webpage URL.";
+          return;
+        }
+
+        try {
+          statusEl.textContent = "Loading images...";
+          const query = new URLSearchParams({
+            url,
+            tag,
+            sid,
+            follow_scope: followScope,
+            path_prefix: pathPrefix,
+            max_depth: maxDepth,
+            max_pages: maxPages,
+            item_selector: itemSelector,
+            next_selector: nextSelector,
+            include_pattern: includePattern,
+            exclude_pattern: excludePattern,
+            delay_ms: delayMs,
+            concurrency,
+            dedup_key: dedupKey,
+            output_fields: outputFields,
+          });
+          const data = await fetchJson(`/api/tagged-images?${query.toString()}`);
+          imageItems = flattenImages(data.pages || []);
+          fillAspectQueue();
+          statusEl.textContent = `Loaded ${imageItems.length} images. scope=${followScope}, depth=${maxDepth}, pages=${maxPages}.`;
+          await placeRec1();
+          await createNextRec(rec1El);
+          const rec2 = wallEl.querySelectorAll(".bounding-box")[1];
+          if (rec2) {
+            await createNextRec(rec2);
+          }
+        } catch (error) {
+          statusEl.textContent = error.message || "Failed to load images.";
+        }
+      }
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        loadImages();
+      });
+
+      window.addEventListener("load", () => {
+        loadImages();
+      });
+    </script>
+  </body>
+</html>

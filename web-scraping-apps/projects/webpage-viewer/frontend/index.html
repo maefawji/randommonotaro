@@ -6,71 +6,102 @@
     <title>Webpage Image Viewer</title>
     <link rel="stylesheet" href="./style.css" />
   </head>
-  <body data-page-mode="b" data-page-key="web">
+  <body data-page-mode="b" data-page-key="web" data-display-mode="flow">
+    <div id="settings-dot" class="settings-dot" role="button" tabindex="0" aria-label="Open settings" aria-expanded="false" aria-controls="settings-panel"></div>
+    <aside id="settings-panel" class="settings-panel" aria-hidden="true">
+      <label class="settings-option settings-menu-control">
+        <input id="concept-toggle-input" type="checkbox" aria-controls="concept-panel" />
+        <span class="settings-label concept-label">Text</span>
+        <span class="settings-state settings-state-empty" aria-hidden="true"></span>
+      </label>
+      <label class="settings-option settings-menu-control">
+        <input id="display-mode-input" type="checkbox" />
+        <span class="settings-label">Display Mode</span>
+        <span id="display-mode-state" class="settings-state">Scroll</span>
+      </label>
+      <label class="settings-option settings-menu-control">
+        <input id="auto-scroll-input" type="checkbox" checked />
+        <span class="settings-label">Auto</span>
+        <span class="settings-state" data-setting-state-for="auto-scroll-input">ON</span>
+      </label>
+      <label class="settings-option settings-menu-control">
+        <input id="background-filter-input" type="checkbox" checked />
+        <span class="settings-label">Background Filter</span>
+        <span class="settings-state" data-setting-state-for="background-filter-input">ON</span>
+      </label>
+      <label class="settings-option settings-menu-control">
+        <input id="layout-debug-input" type="checkbox" />
+        <span class="settings-label">Layout Guides</span>
+        <span class="settings-state" data-setting-state-for="layout-debug-input">OFF</span>
+      </label>
+      <p id="concept-panel" class="concept-panel" hidden>
+        Drift Hardware Store
+        <br /><br />
+        MONOTARO is a massive Japanese online hardware and industrial supply store.
+        In this website, I collected the entire category structure of the site in advance, and display products by randomly selecting from its lowest-level categories.
+        <br /><br />
+        Sometimes I want ideas grounded in ready-made products. In those moments, instead of going to a physical store, I open MONOTARO and browse for components, tools, or materials that might be useful. However, I noticed that I always ended up returning to the same categories out of habit. This project was created as a tool to break away from those patterns and dig more deeply through the catalog.
+        <br /><br />
+        The layout itself also incorporates randomness and contrast, allowing the products to appear less as information and more as objects. Images with complex backgrounds can be excluded in order to emphasize this object-like quality.
+        <br /><br />
+        Since loading takes some time, previously fetched images are allowed to reappear. Unexpectedly, this created a kind of musical repetition. Rather than being completely random, previously seen objects gradually return and circulate again.
+        <br /><br />
+        In the end, the website became something closer to a generative environment, where MONOTARO’s products continuously drift, repeat, and recompose themselves — somewhat reminiscent of Bloom by Brian Eno.
+        <br /><br />
+        Developed by kentaro nomura
+        <br />
+        Contact: Kentaro.nmr@gmail.com
+      </p>
+    </aside>
+
     <main class="app-shell">
       <section
         id="gallery"
         class="gallery"
-        aria-label="Wall surface"
+        aria-label="Infinite image stream"
         style="width:100vw;margin-left:calc(50% - 50vw);display:flex;justify-content:center;"
       >
         <section
           id="wall-surface"
           class="wall-surface"
-          style="position:relative;width:clamp(320px,92vw,1400px);min-height:70vh;border:none;background:#fff;overflow:hidden;"
+          hidden
+          style="position:relative;width:92vw;height:92vh;border:none;background:#fff;overflow:hidden;"
         >
           <div id="bounding-box" class="bounding-box"></div>
         </section>
+        <section id="infinite-feed" class="infinite-feed" aria-label="Infinite image stream"></section>
       </section>
 
-      <section class="e-lab">
-        <form id="fetch-form" class="fetch-form">
-          <details class="web-advanced">
-            <summary>Advanced</summary>
-            <section class="web-advanced-section">
-              <h4 class="web-advanced-title">MonotaRO Category Logic</h4>
-              <div class="input-grid web-settings-grid">
-                <label>
-                  <span>Category Data File</span>
-                  <input id="category-data-input" name="category_data" type="text" value="backend/data/monotaro_categories.deep.csv" readonly />
-                </label>
-                <label>
-                  <span>Random Products / Load</span>
-                  <input id="max-pages-input" name="max_pages" type="number" min="1" max="500" value="100" />
-                </label>
-                <label>
-                  <span>Cookie Header (optional)</span>
-                  <input id="cookie-input" name="cookie" type="text" placeholder="session=...; token=..." />
-                </label>
-                <label>
-                  <span>Delay (ms)</span>
-                  <input id="delay-ms-input" name="delay_ms" type="number" min="0" max="5000" value="180" />
-                </label>
-              </div>
-            </section>
-            <p id="crawl-state" class="meta">Crawl state: idle</p>
-            <p id="advanced-result" class="meta">Result: not loaded yet.</p>
-            <p id="cached-page-urls" class="meta" style="white-space: pre-line;">Cached Page URLs: (none)</p>
-            <p id="cached-image-urls" class="meta" style="white-space: pre-line;">Cached Image URLs: (none)</p>
-          </details>
-          <button id="submit-button" type="submit">Load Images</button>
-        </form>
-        <div class="e-lab-header">
-          <p id="status" class="meta">No images loaded yet.</p>
-          <a id="reroll-button" href="#" class="e-reroll-button">Reroll Rec1</a>
+      <section class="e-lab" hidden>
+        <input id="category-data-input" name="category_data" type="hidden" value="backend/data/monotaro_categories.deep.csv" readonly />
+        <input id="max-pages-input" name="max_pages" type="hidden" min="1" max="200" value="48" />
+        <input id="cookie-input" name="cookie" type="hidden" value="" />
+        <input id="delay-ms-input" name="delay_ms" type="hidden" min="0" max="5000" value="0" />
+        <p id="status" class="meta">Loading images...</p>
+        <p id="crawl-state" class="meta">Crawl state: idle</p>
+        <p id="advanced-result" class="meta">Result: not loaded yet.</p>
+        <p id="cached-page-urls" class="meta">Cached Page URLs: (none)</p>
+        <p id="cached-image-urls" class="meta">Cached Image URLs: (none)</p>
+        <div id="local-stats" class="local-stats" aria-live="polite">
+          <span>Cache 0</span>
+          <span>Placed 0</span>
+          <span>Blocked 0</span>
         </div>
       </section>
 
-      <nav class="page-nav" aria-label="View pages">
-        <a class="page-nav-link is-current" href="./index.html">Web Page</a>
-      </nav>
+      <div id="flow-loader" class="flow-loader" aria-live="polite">
+        <span class="flow-loader-dot"></span>
+        <span id="flow-loader-text">Loading images...</span>
+        <span id="flow-loader-progress" class="flow-loader-progress" aria-hidden="true">
+          <span class="flow-loader-progress-bar"></span>
+        </span>
+      </div>
     </main>
 
     <script>
       const wallEl = document.getElementById("wall-surface");
+      const infiniteFeedEl = document.getElementById("infinite-feed");
       const rec1El = document.getElementById("bounding-box");
-      const rerollButton = document.getElementById("reroll-button");
-      const form = document.getElementById("fetch-form");
       const categoryDataInput = document.getElementById("category-data-input");
       const maxPagesInput = document.getElementById("max-pages-input");
       const cookieInput = document.getElementById("cookie-input");
@@ -80,25 +111,132 @@
       const cachedPageUrlsEl = document.getElementById("cached-page-urls");
       const cachedImageUrlsEl = document.getElementById("cached-image-urls");
       const crawlStateEl = document.getElementById("crawl-state");
+      const localStatsEl = document.getElementById("local-stats");
+      const flowLoaderEl = document.getElementById("flow-loader");
+      const flowLoaderTextEl = document.getElementById("flow-loader-text");
+      const flowLoaderProgressEl = document.getElementById("flow-loader-progress");
+      const settingsDotEl = document.getElementById("settings-dot");
+      const settingsPanelEl = document.getElementById("settings-panel");
+      const conceptToggleInput = document.getElementById("concept-toggle-input");
+      const conceptPanelEl = document.getElementById("concept-panel");
+      const backgroundFilterInput = document.getElementById("background-filter-input");
+      const layoutDebugInput = document.getElementById("layout-debug-input");
+      const autoScrollInput = document.getElementById("auto-scroll-input");
+      const displayModeInput = document.getElementById("display-mode-input");
+      const displayModeState = document.getElementById("display-mode-state");
 
       const API_BASE = "";
+      const LOCAL_SETTINGS_KEY = "webpage-viewer-local-settings-v2";
       let recCount = 1;
       let cacheImageItems = [];
       let isPlacing = false;
       let isCacheRefilling = false;
       let isLoadingImages = false;
+      let isFlowAppending = false;
+      let displayMode = "flow";
+      const DISPLAY_MODES = ["flow", "wall", "list"];
+      const DISPLAY_MODE_LABELS = {
+        flow: "Scroll",
+        wall: "Wall",
+        list: "List",
+      };
+      let flowNextY = 0;
+      let autoScrollFrameId = null;
+      let autoScrollLastTime = 0;
+      let autoScrollRemainder = 0;
+      let autoWallTimerId = null;
+      let isAutoWallClicking = false;
       let removeUnderMode = true;
       let lastUrlCount = 0;
       let lastImageCount = 0;
       let cacheMonitorId = null;
       const blockedImageUrls = new Set();
       const blockedPageUrls = new Set();
-      const PREFETCH_COUNT = 100;
+      const INITIAL_PRODUCT_COUNT = 5;
+      const INITIAL_PLACE_COUNT = 3;
+      const FLOW_FIRST_DISPLAY_COUNT = 5;
+      const MAX_ASPECT_PREFETCH = 8;
+      const FLOW_INITIAL_COUNT = 24;
+      const FLOW_APPEND_BATCH = 18;
+      const FLOW_AHEAD_PX = 9000;
+      const FLOW_LOADING_BUFFER_PX = 3200;
+      const FLOW_EMERGENCY_AHEAD_PX = 120;
+      const FLOW_EMERGENCY_REVEAL_GAP_PX = 180;
+      const AUTO_SCROLL_PX_PER_SECOND = 64;
+      const AUTO_WALL_CLICK_INTERVAL_MS = 2200;
+      const FLOW_SECTION_DEFAULT_ITEM_COUNT = 9;
+      const FLOW_REPEAT_MEMORY_LIMIT = 42;
+      const FLOW_REPEAT_MAX_AGE = 72;
+      const FLOW_REPEAT_COOLDOWN = 34;
+      const FLOW_REPEAT_MAX_USES = 1;
+      const FLOW_EMERGENCY_REPEAT_COOLDOWN = 4;
+      const FLOW_EMERGENCY_LAST_REPEAT_COOLDOWN = 10;
+      const FLOW_GROUP_CHANCE = 0.24;
+      const LIST_GRID_MIN_CELL_PX = 170;
+      const LIST_GRID_ROW_HEIGHT_PX = 190;
+      const WALL_MIN_REC_SIZE_PX = 56;
+      const WALL_SLOT_RANDOM_ATTEMPTS = 120;
+      const WALL_SLOT_GRID_STEPS = 9;
+      const BACKGROUND_FRAME_OFFSET_PX = 6;
+      const BACKGROUND_FRAME_THICKNESS_PX = 10;
+      const BACKGROUND_DARKNESS_THRESHOLD = 12;
+      const BACKGROUND_FILLED_RATIO_THRESHOLD = 0.12;
+      const FLOW_LAYOUT_PATTERNS = [
+        "grid-hang",
+        "off-grid",
+        "anchor-small",
+        "big-with-small-row",
+        "center-medium-row",
+        "same-size-horizontal",
+        "same-size-vertical",
+        "big-left-right",
+        "big-with-group",
+        "center-max-triplet",
+        "loose-row",
+        "single-row",
+        "constellation",
+        "wide-pair",
+      ];
+      const FLOW_SIZE_PATTERNS = ["small-heavy", "binary", "medium-run", "anchor-scale"];
       const aspectQueue = [];
       const readyAspects = [];
+      const queuedAspectUrls = new Set();
+      const flowSeenImageUrls = new Set();
+      const flowPlacedRects = [];
+      const flowSectionLayouts = new Map();
+      const flowHistoryItems = [];
+      const flowMotifItems = [];
+      const flowMotifs = [];
+      const flowMotifDraft = [];
+      const flowPlacedItems = [];
+      const flowRepeatUses = new Map();
+      const flowLastRepeatAt = new Map();
+      const flowSectionGuides = new Map();
+      const backgroundAnalysisCache = new Map();
 
       function randomBetween(min, max) {
         return min + Math.random() * (max - min);
+      }
+
+      function hashString(value) {
+        let hash = 2166136261;
+        for (let index = 0; index < value.length; index += 1) {
+          hash ^= value.charCodeAt(index);
+          hash = Math.imul(hash, 16777619);
+        }
+        return Math.abs(hash >>> 0);
+      }
+
+      function isMobileViewport() {
+        return false;
+      }
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function isFeedDisplayMode() {
+        return displayMode === "flow" || displayMode === "list";
       }
 
       function flattenImages(pages) {
@@ -166,6 +304,7 @@
         const resultText = `Result: URLs ${lastUrlCount} / Images ${lastImageCount} / Cached ${cacheImageItems.length}`;
         statusEl.textContent = resultText.replace("Result: ", "");
         advancedResultEl.textContent = resultText;
+        refreshLocalStats();
       }
 
       function refreshCacheUi() {
@@ -174,11 +313,275 @@
         updateResultText();
       }
 
-      function ensureCacheStock() {
-        if (isLoadingImages || cacheImageItems.length >= PREFETCH_COUNT || isCacheRefilling) {
+      function refreshLocalStats() {
+        const placedCount = wallEl.querySelectorAll('.bounding-box[data-ready="true"]').length;
+        const flowCount = infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
+        const blockedCount = blockedImageUrls.size + blockedPageUrls.size;
+        localStatsEl.innerHTML = [
+          `<span>Cache ${cacheImageItems.length}</span>`,
+          `<span>Placed ${isFeedDisplayMode() ? flowCount : placedCount}</span>`,
+          `<span>Blocked ${blockedCount}</span>`,
+        ].join("");
+      }
+
+      function setBusy(isBusy) {
+        document.body.dataset.loading = isBusy ? "true" : "false";
+      }
+
+      function updateFlowLoader(message, progress = null) {
+        if (!flowLoaderEl || !flowLoaderTextEl) {
           return;
         }
-        refillCacheToTarget(PREFETCH_COUNT);
+        const placedCount = infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
+        const isActive = isLoadingImages || isCacheRefilling || isFlowAppending;
+        flowLoaderEl.dataset.active = isActive ? "true" : "false";
+        const normalizedProgress = Number.isFinite(progress) ? clamp(progress, 0, 100) : null;
+        flowLoaderEl.dataset.progressActive = normalizedProgress === null ? "false" : "true";
+        if (flowLoaderProgressEl) {
+          flowLoaderProgressEl.style.setProperty("--flow-load-progress", String(normalizedProgress ?? 0));
+        }
+        flowLoaderTextEl.textContent = message || (
+          isActive
+            ? "Loading images..."
+            : placedCount === 0
+            ? "Loading images..."
+            : `${placedCount} images loaded`
+        );
+      }
+
+      function loadLocalSettings() {
+        try {
+          const raw = window.localStorage.getItem(LOCAL_SETTINGS_KEY);
+          if (!raw) {
+            return;
+          }
+          const settings = JSON.parse(raw);
+          if (settings.maxPages) {
+            maxPagesInput.value = settings.maxPages;
+          }
+          if (settings.delayMs) {
+            delayMsInput.value = settings.delayMs;
+          }
+          if (typeof settings.excludeBackgroundImages === "boolean") {
+            backgroundFilterInput.checked = settings.excludeBackgroundImages;
+          }
+          if (typeof settings.showLayoutDebug === "boolean") {
+            layoutDebugInput.checked = settings.showLayoutDebug;
+          }
+          if (typeof settings.autoScroll === "boolean") {
+            autoScrollInput.checked = settings.autoScroll;
+          }
+          if (settings.displayMode && DISPLAY_MODES.includes(settings.displayMode)) {
+            displayMode = settings.displayMode;
+          } else if (typeof settings.wallMode === "boolean") {
+            displayMode = settings.wallMode ? "wall" : "flow";
+          }
+        } catch (error) {
+          window.localStorage.removeItem(LOCAL_SETTINGS_KEY);
+        }
+      }
+
+      function saveLocalSettings() {
+        const settings = {
+          maxPages: maxPagesInput.value,
+          delayMs: delayMsInput.value,
+          excludeBackgroundImages: backgroundFilterInput.checked,
+          showLayoutDebug: layoutDebugInput.checked,
+          autoScroll: autoScrollInput.checked,
+          displayMode,
+        };
+        window.localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(settings));
+      }
+
+      function updateLayoutDebugMode() {
+        document.body.dataset.layoutDebug = layoutDebugInput.checked ? "true" : "false";
+      }
+
+      function updateSettingsStates() {
+        document.querySelectorAll("[data-setting-state-for]").forEach((stateEl) => {
+          const inputEl = document.getElementById(stateEl.dataset.settingStateFor);
+          stateEl.textContent = inputEl?.checked ? "ON" : "OFF";
+        });
+        displayModeState.textContent = DISPLAY_MODE_LABELS[displayMode] || "Scroll";
+      }
+
+      function updateAutoMode() {
+        document.body.dataset.autoScroll = autoScrollInput.checked ? "true" : "false";
+        stopAutoScroll();
+        stopAutoWallClick();
+        if (!autoScrollInput.checked) {
+          return;
+        }
+        if (displayMode === "wall") {
+          if (canStartAutoWallClick()) {
+            startAutoWallClick();
+          }
+        } else if (canStartAutoScroll()) {
+          startAutoScroll();
+        }
+      }
+
+      function updateAutoScrollMode() {
+        updateAutoMode();
+      }
+
+      function canStartAutoWallClick() {
+        return wallEl.querySelector('.bounding-box[data-ready="true"]') !== null;
+      }
+
+      function startAutoWallClick() {
+        if (autoWallTimerId !== null) {
+          return;
+        }
+        autoWallTimerId = window.setInterval(runAutoWallClick, AUTO_WALL_CLICK_INTERVAL_MS);
+      }
+
+      function stopAutoWallClick() {
+        if (autoWallTimerId !== null) {
+          window.clearInterval(autoWallTimerId);
+          autoWallTimerId = null;
+        }
+        isAutoWallClicking = false;
+      }
+
+      async function runAutoWallClick() {
+        if (
+          isAutoWallClicking ||
+          !autoScrollInput.checked ||
+          displayMode !== "wall" ||
+          isPlacing
+        ) {
+          return;
+        }
+        const recs = Array.from(wallEl.querySelectorAll('.bounding-box[data-ready="true"]'))
+          .filter((rec) => rec.dataset.wallExiting !== "true");
+        if (!recs.length) {
+          return;
+        }
+        const rec = getRandomFrom(recs);
+        if (!rec) {
+          return;
+        }
+        isAutoWallClicking = true;
+        try {
+          await handleRecClick(rec);
+        } finally {
+          isAutoWallClicking = false;
+        }
+      }
+
+      function canStartAutoScroll() {
+        if (displayMode === "flow") {
+          return infiniteFeedEl.querySelectorAll(".infinite-feed-item").length >= FLOW_FIRST_DISPLAY_COUNT;
+        }
+        return false;
+      }
+
+      function startAutoScroll() {
+        if (autoScrollFrameId !== null) {
+          return;
+        }
+        autoScrollLastTime = performance.now();
+        autoScrollRemainder = 0;
+        autoScrollFrameId = window.requestAnimationFrame(stepAutoScroll);
+      }
+
+      function stopAutoScroll() {
+        if (autoScrollFrameId !== null) {
+          window.cancelAnimationFrame(autoScrollFrameId);
+          autoScrollFrameId = null;
+        }
+        autoScrollLastTime = 0;
+        autoScrollRemainder = 0;
+      }
+
+      function stepAutoScroll(timestamp) {
+        if (!autoScrollInput.checked || displayMode !== "flow") {
+          stopAutoScroll();
+          return;
+        }
+        const deltaSeconds = Math.min(0.08, Math.max(0, (timestamp - autoScrollLastTime) / 1000));
+        autoScrollLastTime = timestamp;
+        if (displayMode === "flow") {
+          maintainInfiniteFeed();
+        }
+        const rawDistance = AUTO_SCROLL_PX_PER_SECOND * deltaSeconds + autoScrollRemainder;
+        const scrollDistance = Math.floor(rawDistance * 100) / 100;
+        autoScrollRemainder = rawDistance - scrollDistance;
+        window.scrollBy({ top: scrollDistance, left: 0, behavior: "auto" });
+        autoScrollFrameId = window.requestAnimationFrame(stepAutoScroll);
+      }
+
+      function getCacheTarget() {
+        const value = Number(maxPagesInput.value);
+        if (!Number.isFinite(value)) {
+          return 96;
+        }
+        return Math.max(48, Math.min(240, Math.floor(value)));
+      }
+
+      function ensureCacheStock() {
+        const targetCount = getCacheTarget();
+        if (cacheImageItems.length >= targetCount || isCacheRefilling) {
+          return;
+        }
+        refillCacheToTarget(targetCount);
+      }
+
+      function extendFlowLoadingBuffer() {
+        if (!isFeedDisplayMode()) {
+          return;
+        }
+        if (cacheImageItems.length === 0 && !hasEmergencyFlowPool()) {
+          trimFlowLoadingBuffer();
+          return;
+        }
+        const currentMinHeight = Number.parseFloat(infiniteFeedEl.style.minHeight || "0") || 0;
+        const viewportBottom = (window.scrollY || document.documentElement.scrollTop || 0) + (window.innerHeight || 0);
+        const contentMinHeight = displayMode === "list" ? 0 : flowNextY + window.innerHeight + FLOW_LOADING_BUFFER_PX;
+        const targetMinHeight = Math.max(currentMinHeight, contentMinHeight, viewportBottom + FLOW_LOADING_BUFFER_PX);
+        infiniteFeedEl.style.minHeight = `${Math.ceil(targetMinHeight)}px`;
+      }
+
+      function trimFlowLoadingBuffer() {
+        if (!isFeedDisplayMode()) {
+          return;
+        }
+        const safeMinHeight = displayMode === "list"
+          ? Math.max(document.body.scrollHeight, window.innerHeight * 1.2)
+          : Math.max(flowNextY + window.innerHeight, window.innerHeight * 1.2);
+        infiniteFeedEl.style.minHeight = `${Math.ceil(safeMinHeight)}px`;
+      }
+
+      async function setDisplayMode(nextMode, shouldStart = true) {
+        displayMode = DISPLAY_MODES.includes(nextMode) ? nextMode : "flow";
+        document.body.dataset.displayMode = displayMode;
+        wallEl.hidden = displayMode !== "wall";
+        infiniteFeedEl.hidden = displayMode === "wall";
+        if (!shouldStart) {
+          updateSettingsStates();
+          refreshLocalStats();
+          return;
+        }
+        if (displayMode === "wall") {
+          await startWallMode();
+          updateAutoMode();
+        } else if (displayMode === "list") {
+          if (infiniteFeedEl.children.length) {
+            relayoutFlowItems();
+          }
+          await startListMode();
+          updateAutoMode();
+        } else {
+          if (infiniteFeedEl.children.length) {
+            relayoutFlowItems();
+          }
+          await startFlowMode();
+          updateAutoMode();
+        }
+        saveLocalSettings();
+        updateSettingsStates();
+        refreshLocalStats();
       }
 
       function startCacheMonitor() {
@@ -210,9 +613,15 @@
         return unique;
       }
 
-      function mergeIntoCache(newItems, targetCount = PREFETCH_COUNT) {
+      async function mergeIntoCache(newItems, targetCount = getCacheTarget(), progressOptions = null) {
         const existing = new Set(cacheImageItems.map((item) => item.imageUrl));
-        for (const item of newItems) {
+        const total = Math.max(1, newItems.length);
+        for (const [index, item] of newItems.entries()) {
+          if (progressOptions) {
+            const ratio = index / total;
+            const progress = progressOptions.start + (progressOptions.end - progressOptions.start) * ratio;
+            updateFlowLoader(`${progressOptions.label} ${index + 1}/${newItems.length}`, progress);
+          }
           if (!item?.imageUrl || existing.has(item.imageUrl)) {
             continue;
           }
@@ -222,12 +631,203 @@
           if (item.pageUrl && blockedPageUrls.has(item.pageUrl)) {
             continue;
           }
+          if (await shouldExcludeBackgroundImage(item)) {
+            blockedImageUrls.add(item.imageUrl);
+            continue;
+          }
           cacheImageItems.push(item);
           existing.add(item.imageUrl);
           if (cacheImageItems.length >= targetCount) {
             break;
           }
         }
+        if (progressOptions) {
+          updateFlowLoader(`${progressOptions.label} ${newItems.length}/${newItems.length}`, progressOptions.end);
+        }
+      }
+
+      async function shouldExcludeBackgroundImage(item) {
+        if (!backgroundFilterInput.checked || !item?.imageUrl) {
+          return false;
+        }
+        if (backgroundAnalysisCache.has(item.imageUrl)) {
+          return backgroundAnalysisCache.get(item.imageUrl);
+        }
+        try {
+          const exclusion = await detectExcludedImage(item.imageUrl);
+          backgroundAnalysisCache.set(item.imageUrl, exclusion);
+          return exclusion;
+        } catch (error) {
+          backgroundAnalysisCache.set(item.imageUrl, false);
+          return false;
+        }
+      }
+
+      function loadImageForAnalysis(imageUrl) {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.decoding = "async";
+          img.onload = () => resolve(img);
+          img.onerror = reject;
+          img.src = buildImageProxyUrl(imageUrl);
+        });
+      }
+
+      async function detectExcludedImage(imageUrl) {
+        const img = await loadImageForAnalysis(imageUrl);
+        const sourceWidth = img.naturalWidth || img.width;
+        const sourceHeight = img.naturalHeight || img.height;
+        if (!sourceWidth || !sourceHeight) {
+          return false;
+        }
+
+        const maxSide = 128;
+        const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+        canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        if (!context) {
+          return false;
+        }
+        context.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const imageData = context.getImageData(0, 0, canvas.width, canvas.height).data;
+
+        if (isNoImagePlaceholder({ imageData, width: canvas.width, height: canvas.height })) {
+          return true;
+        }
+
+        return detectImageBackgroundFromPixels({ imageData, width: canvas.width, height: canvas.height, scale });
+      }
+
+      function detectImageBackgroundFromPixels({ imageData, width, height, scale }) {
+        const offset = Math.max(1, Math.round(BACKGROUND_FRAME_OFFSET_PX * scale));
+        const thickness = Math.max(1, Math.round(BACKGROUND_FRAME_THICKNESS_PX * scale));
+        const xMin = offset;
+        const yMin = offset;
+        const xMax = width - offset - 1;
+        const yMax = height - offset - 1;
+        if (xMax <= xMin || yMax <= yMin) {
+          return false;
+        }
+
+        let sampled = 0;
+        let filled = 0;
+
+        for (let y = yMin; y <= yMax; y += 1) {
+          for (let x = xMin; x <= xMax; x += 1) {
+            const nearFrame =
+              x - xMin < thickness ||
+              xMax - x < thickness ||
+              y - yMin < thickness ||
+              yMax - y < thickness;
+            if (!nearFrame) {
+              continue;
+            }
+            sampled += 1;
+            const index = (y * width + x) * 4;
+            const alpha = imageData[index + 3];
+            if (alpha < 48) {
+              continue;
+            }
+            const red = imageData[index];
+            const green = imageData[index + 1];
+            const blue = imageData[index + 2];
+            const luminance = red * 0.2126 + green * 0.7152 + blue * 0.0722;
+            const darkness = 255 - luminance;
+            if (darkness >= BACKGROUND_DARKNESS_THRESHOLD) {
+              filled += 1;
+            }
+          }
+        }
+
+        return sampled > 0 && filled / sampled >= BACKGROUND_FILLED_RATIO_THRESHOLD;
+      }
+
+      function isNoImagePlaceholder({ imageData, width, height }) {
+        const aspectRatio = width / Math.max(1, height);
+        if (aspectRatio < 0.86 || aspectRatio > 1.16) {
+          return false;
+        }
+
+        const totalPixels = width * height;
+        let nearWhite = 0;
+        let grayInk = 0;
+        let saturated = 0;
+        let grayMinX = width;
+        let grayMinY = height;
+        let grayMaxX = 0;
+        let grayMaxY = 0;
+        let topTextGray = 0;
+        let lowerTextGray = 0;
+
+        for (let y = 0; y < height; y += 1) {
+          for (let x = 0; x < width; x += 1) {
+            const index = (y * width + x) * 4;
+            const alpha = imageData[index + 3];
+            if (alpha < 48) {
+              nearWhite += 1;
+              continue;
+            }
+            const red = imageData[index];
+            const green = imageData[index + 1];
+            const blue = imageData[index + 2];
+            const maxChannel = Math.max(red, green, blue);
+            const minChannel = Math.min(red, green, blue);
+            const luminance = red * 0.2126 + green * 0.7152 + blue * 0.0722;
+            const chroma = maxChannel - minChannel;
+
+            if (luminance >= 244 && chroma <= 10) {
+              nearWhite += 1;
+              continue;
+            }
+            if (chroma > 28) {
+              saturated += 1;
+            }
+            if (chroma <= 16 && luminance >= 110 && luminance <= 205) {
+              grayInk += 1;
+              grayMinX = Math.min(grayMinX, x);
+              grayMinY = Math.min(grayMinY, y);
+              grayMaxX = Math.max(grayMaxX, x);
+              grayMaxY = Math.max(grayMaxY, y);
+              const xRatio = x / width;
+              const yRatio = y / height;
+              if (xRatio >= 0.16 && xRatio <= 0.84 && yRatio >= 0.28 && yRatio <= 0.50) {
+                topTextGray += 1;
+              }
+              if (xRatio >= 0.20 && xRatio <= 0.80 && yRatio >= 0.48 && yRatio <= 0.68) {
+                lowerTextGray += 1;
+              }
+            }
+          }
+        }
+
+        const whiteRatio = nearWhite / totalPixels;
+        const grayRatio = grayInk / totalPixels;
+        const saturatedRatio = saturated / totalPixels;
+        if (whiteRatio < 0.78 || grayRatio < 0.018 || grayRatio > 0.16 || saturatedRatio > 0.006) {
+          return false;
+        }
+
+        const grayWidthRatio = (grayMaxX - grayMinX + 1) / width;
+        const grayHeightRatio = (grayMaxY - grayMinY + 1) / height;
+        const grayCenterX = (grayMinX + grayMaxX) / 2 / width;
+        const grayCenterY = (grayMinY + grayMaxY) / 2 / height;
+        const topTextRatio = topTextGray / totalPixels;
+        const lowerTextRatio = lowerTextGray / totalPixels;
+
+        return (
+          grayWidthRatio >= 0.42 &&
+          grayWidthRatio <= 0.82 &&
+          grayHeightRatio >= 0.16 &&
+          grayHeightRatio <= 0.42 &&
+          grayCenterX >= 0.42 &&
+          grayCenterX <= 0.58 &&
+          grayCenterY >= 0.40 &&
+          grayCenterY <= 0.58 &&
+          topTextRatio >= 0.012 &&
+          lowerTextRatio >= 0.004
+        );
       }
 
       function buildFetchQuery(maxPagesOverride) {
@@ -248,11 +848,12 @@
         };
       }
 
-      async function refillCacheToTarget(targetCount = PREFETCH_COUNT) {
+      async function refillCacheToTarget(targetCount = getCacheTarget()) {
         if (isCacheRefilling) {
           return;
         }
         isCacheRefilling = true;
+        updateFlowLoader("Loading more images...", 12);
         crawlStateEl.textContent = "Crawl state: picking random categories...";
         try {
           let safety = 0;
@@ -260,10 +861,16 @@
           while (cacheImageItems.length < targetCount && safety < maxAttempts) {
             const before = cacheImageItems.length;
             const batchCount = Math.max(1, Math.min(24, targetCount - cacheImageItems.length));
+            const progressBase = Math.min(88, Math.round((cacheImageItems.length / targetCount) * 100));
+            updateFlowLoader(`Loading more images ${cacheImageItems.length}/${targetCount}`, progressBase);
             const { data, newItems } = await fetchRandomProducts(batchCount);
             lastUrlCount = Number(data.url_count || 0);
             lastImageCount = Number(data.image_count || 0);
-            mergeIntoCache(newItems, targetCount);
+            await mergeIntoCache(newItems, targetCount, {
+              label: "Filtering more images",
+              start: progressBase,
+              end: Math.min(94, progressBase + 8),
+            });
             refreshCacheUi();
             if (cacheImageItems.length === before) {
               safety += 1;
@@ -274,10 +881,44 @@
 
           refreshCacheUi();
           aspectQueue.length = 0;
-          fillAspectQueue();
+          if (displayMode === "wall") {
+            fillAspectQueue();
+            updateAutoScrollMode();
+          }
+          if (isFeedDisplayMode()) {
+            maintainInfiniteFeed();
+          }
         } finally {
           isCacheRefilling = false;
           crawlStateEl.textContent = "Crawl state: idle";
+          updateFlowLoader();
+          if (isFeedDisplayMode()) {
+            window.requestAnimationFrame(() => maintainInfiniteFeed());
+          }
+        }
+      }
+
+      async function loadFirstFilteredImages(requiredCount = FLOW_FIRST_DISPLAY_COUNT) {
+        let attempts = 0;
+        const maxAttempts = 12;
+        while (cacheImageItems.length < requiredCount && attempts < maxAttempts) {
+          const before = cacheImageItems.length;
+          const batchCount = Math.max(INITIAL_PRODUCT_COUNT, requiredCount - cacheImageItems.length);
+          updateFlowLoader(`Fetching first images ${cacheImageItems.length}/${requiredCount}`, 12);
+          const { data, newItems } = await fetchRandomProducts(batchCount);
+          lastUrlCount = Number(data.url_count || 0);
+          lastImageCount = Number(data.image_count || 0);
+          updateFlowLoader(`Filtering first images ${cacheImageItems.length}/${requiredCount}`, 42);
+          await mergeIntoCache(newItems, requiredCount, {
+            label: "Filtering first images",
+            start: 42,
+            end: 72,
+          });
+          refreshCacheUi();
+          attempts += cacheImageItems.length === before ? 2 : 1;
+        }
+        if (cacheImageItems.length < requiredCount) {
+          throw new Error(`Could not find ${requiredCount} filtered images.`);
         }
       }
 
@@ -287,6 +928,1310 @@
           cookie: cookieInput.value.trim(),
         });
         return `${API_BASE}/api/image?${query.toString()}`;
+      }
+
+      function takeNextFlowItem() {
+        const groupUnit = takeNextFlowGroupUnit();
+        if (groupUnit) {
+          return groupUnit;
+        }
+
+        if (cacheImageItems.length === 0 && !shouldUseEmergencyFlow()) {
+          return null;
+        }
+
+        const historyPick = pickRepeatedFlowItem();
+        if (historyPick) {
+          return historyPick;
+        }
+
+        return takeNextFreshFlowItem();
+      }
+
+      function takeNextFreshFlowItem() {
+        const nextIndex = cacheImageItems.findIndex((item) =>
+          item?.imageUrl && !flowSeenImageUrls.has(item.imageUrl)
+        );
+        if (nextIndex < 0) {
+          return null;
+        }
+        const [item] = cacheImageItems.splice(nextIndex, 1);
+        flowSeenImageUrls.add(item.imageUrl);
+        rememberFlowItem(item);
+        return item;
+      }
+
+      function hasEmergencyFlowPool() {
+        return flowHistoryItems.length >= 3 || flowPlacedItems.length >= 3;
+      }
+
+      function shouldUseEmergencyFlow() {
+        if (!hasEmergencyFlowPool()) {
+          return false;
+        }
+        return cacheImageItems.length === 0 && getFlowContentRemainingPx() < FLOW_EMERGENCY_AHEAD_PX;
+      }
+
+      function takeEmergencyFlowItem() {
+        if (!shouldUseEmergencyFlow()) {
+          return null;
+        }
+        const nextIndex = infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
+        const historyPool = flowHistoryItems.length >= 3
+          ? flowHistoryItems
+          : flowPlacedItems.map((entry) => entry.item).filter(Boolean);
+        const candidates = historyPool.filter((item) => canEmergencyRepeatFlowItem(item, nextIndex));
+        if (!candidates.length) {
+          return null;
+        }
+        const seed = hashString(`emergency:${nextIndex}:${candidates.length}`);
+        const item = candidates[seed % candidates.length];
+        if (!item?.imageUrl) {
+          return null;
+        }
+        return markFlowRepeat(cloneFlowItem(item, {
+          repeatKind: "emergency",
+        }), nextIndex);
+      }
+
+      function takeNextFlowGroupUnit() {
+        const placementIndex = infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
+        const seed = hashString(`flow-group:${placementIndex}:${cacheImageItems.length}`);
+        const sectionInfo = getFlowSectionInfo(placementIndex);
+        const layoutPattern = getFlowLayoutPattern(sectionInfo.index);
+        const forceBigWithGroup = layoutPattern === "big-with-group" && sectionInfo.itemIndex === 1;
+        if (layoutPattern === "big-with-group" && sectionInfo.itemIndex === 0) {
+          return null;
+        }
+        if (!forceBigWithGroup && placementIndex < 8) {
+          return null;
+        }
+        const shouldGroup = forceBigWithGroup || ((seed % 100) / 100) < FLOW_GROUP_CHANCE || (sectionInfo.itemIndex === 2 && sectionInfo.index % 3 === 1);
+        if (!shouldGroup) {
+          return null;
+        }
+
+        const groupCount = 2 + (Math.floor(seed / 100) % 2);
+        const freshIndices = [];
+        for (let index = 0; index < cacheImageItems.length && freshIndices.length < groupCount; index += 1) {
+          const item = cacheImageItems[index];
+          if (item?.imageUrl && !flowSeenImageUrls.has(item.imageUrl)) {
+            freshIndices.push(index);
+          }
+        }
+        if (freshIndices.length < groupCount) {
+          return null;
+        }
+
+        const groupItems = [];
+        for (let index = freshIndices.length - 1; index >= 0; index -= 1) {
+          const [item] = cacheImageItems.splice(freshIndices[index], 1);
+          groupItems.unshift(item);
+          flowSeenImageUrls.add(item.imageUrl);
+        }
+        groupItems.forEach((item) => rememberFlowItem(item));
+
+        const groupLayouts = groupItems.length === 2
+          ? ["row", "column", "stair-down", "stair-up"]
+          : ["row", "column", "stair-down", "stair-up"];
+        const groupLayout = groupLayouts[Math.floor(seed / 1000) % groupLayouts.length];
+        const groupUrlKey = groupItems.map((item) => item.imageUrl).join("|");
+        return {
+          ...groupItems[0],
+          id: `group:${placementIndex}:${groupUrlKey}`,
+          imageUrl: groupUrlKey,
+          pageUrl: groupItems[0]?.pageUrl || groupItems[0]?.imageUrl || "",
+          __isGroup: true,
+          __groupItems: groupItems,
+          __groupLayout: groupLayout,
+          __groupCount: groupItems.length,
+        };
+      }
+
+      function rememberFlowItem(item) {
+        if (!item?.imageUrl) {
+          return;
+        }
+        const rememberedItem = {
+          ...item,
+          __flowSeenAt: infiniteFeedEl.querySelectorAll(".infinite-feed-item").length,
+        };
+        flowHistoryItems.push(rememberedItem);
+        if (flowHistoryItems.length > FLOW_REPEAT_MEMORY_LIMIT) {
+          flowHistoryItems.shift();
+        }
+        flowMotifItems.push(rememberedItem);
+        if (flowMotifItems.length > 5) {
+          flowMotifItems.shift();
+        }
+        flowMotifDraft.push(rememberedItem);
+        if (flowMotifDraft.length >= 4) {
+          flowMotifs.push({
+            createdAt: infiniteFeedEl.querySelectorAll(".infinite-feed-item").length,
+            items: flowMotifDraft.slice(-4),
+            repeats: 0,
+          });
+          if (flowMotifs.length > 8) {
+            flowMotifs.shift();
+          }
+          flowMotifDraft.splice(0, 2);
+        }
+      }
+
+      function pickRepeatedFlowItem() {
+        const nextIndex = infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
+        pruneFlowRepeatMemory(nextIndex);
+        const sectionInfo = getFlowSectionInfo(nextIndex);
+        if (flowHistoryItems.length >= 18 && nextIndex > 0 && sectionInfo.index % 14 === 10) {
+          const recentPool = flowHistoryItems.slice(-30).filter((item) => canRepeatFlowItem(item, nextIndex));
+          if (!recentPool.length) {
+            return null;
+          }
+          const chorusStart = hashString(`chorus-pool:${sectionInfo.index}`) % recentPool.length;
+          if (sectionInfo.itemIndex < 3) {
+            const item = recentPool[(chorusStart + sectionInfo.itemIndex * 7) % recentPool.length];
+            return markFlowRepeat(cloneFlowItem(item, {
+              repeatKind: "chorus",
+            }), nextIndex);
+          }
+        }
+        if (flowMotifs.length > 0 && nextIndex > 0 && sectionInfo.index % 18 === 9) {
+          const availableMotifs = flowMotifs.filter((motif) =>
+            motif.items.some((item) => canRepeatFlowItem(item, nextIndex))
+          );
+          if (!availableMotifs.length) {
+            return null;
+          }
+          const motif = availableMotifs[hashString(`motif:${sectionInfo.index}`) % availableMotifs.length];
+          if (sectionInfo.itemIndex < motif.items.length) {
+            const item = motif.items[sectionInfo.itemIndex % motif.items.length];
+            if (!canRepeatFlowItem(item, nextIndex)) {
+              return null;
+            }
+            motif.repeats += sectionInfo.itemIndex === 0 ? 1 : 0;
+            return markFlowRepeat(cloneFlowItem(item, {
+              repeatKind: "motif",
+            }), nextIndex);
+          }
+        }
+        if (flowPlacedItems.length >= 18 && nextIndex > 0 && nextIndex % 37 === 11) {
+          const candidates = flowPlacedItems.filter((source) => canRepeatFlowItem(source.item, nextIndex));
+          if (candidates.length) {
+            const source = candidates[hashString(`call-response:${nextIndex}`) % candidates.length];
+            return markFlowRepeat(cloneFlowItem(source.item, {
+              repeatKind: "response",
+            }), nextIndex);
+          }
+        }
+        const feedbackPeriods = [41, 67];
+        for (const period of feedbackPeriods) {
+          if (flowPlacedItems.length > period && nextIndex > 0 && nextIndex % period === 0) {
+            const source = flowPlacedItems[flowPlacedItems.length - period];
+            if (canRepeatFlowItem(source.item, nextIndex)) {
+              return markFlowRepeat(cloneFlowItem(source.item, {
+                repeatKind: "feedback",
+              }), nextIndex);
+            }
+          }
+        }
+        if (flowMotifItems.length >= 3 && nextIndex > 0 && nextIndex % 47 === 0) {
+          const item = flowMotifItems[(nextIndex + sectionInfo.index) % flowMotifItems.length];
+          if (canRepeatFlowItem(item, nextIndex)) {
+            return markFlowRepeat(cloneFlowItem(item, {
+              repeatKind: "motif-fragment",
+            }), nextIndex);
+          }
+        }
+        if (flowHistoryItems.length >= 12 && nextIndex > 0 && nextIndex % 29 === 0) {
+          const candidates = flowHistoryItems.filter((item) => canRepeatFlowItem(item, nextIndex));
+          if (candidates.length) {
+            const historyIndex = hashString(`repeat-single:${nextIndex}`) % candidates.length;
+            return markFlowRepeat(cloneFlowItem(candidates[historyIndex], {
+              repeatKind: "single",
+            }), nextIndex);
+          }
+        }
+        return null;
+      }
+
+      function canRepeatFlowItem(item, nextIndex) {
+        if (!item?.imageUrl) {
+          return false;
+        }
+        const firstSeenAt = Number(item.__flowSeenAt ?? 0);
+        const age = nextIndex - firstSeenAt;
+        if (age < FLOW_REPEAT_COOLDOWN || age > FLOW_REPEAT_MAX_AGE) {
+          return false;
+        }
+        const uses = flowRepeatUses.get(item.imageUrl) || 0;
+        if (uses >= FLOW_REPEAT_MAX_USES) {
+          return false;
+        }
+        const lastRepeatAt = flowLastRepeatAt.get(item.imageUrl);
+        return !Number.isFinite(lastRepeatAt) || nextIndex - lastRepeatAt >= FLOW_REPEAT_COOLDOWN;
+      }
+
+      function canEmergencyRepeatFlowItem(item, nextIndex) {
+        if (!item?.imageUrl) {
+          return false;
+        }
+        const firstSeenAt = Number(item.__flowSeenAt ?? 0);
+        const age = nextIndex - firstSeenAt;
+        if (age < FLOW_EMERGENCY_REPEAT_COOLDOWN) {
+          return false;
+        }
+        const uses = flowRepeatUses.get(item.imageUrl) || 0;
+        if (uses >= FLOW_REPEAT_MAX_USES) {
+          return false;
+        }
+        const lastRepeatAt = flowLastRepeatAt.get(item.imageUrl);
+        return !Number.isFinite(lastRepeatAt) || nextIndex - lastRepeatAt >= FLOW_EMERGENCY_LAST_REPEAT_COOLDOWN;
+      }
+
+      function markFlowRepeat(item, nextIndex) {
+        if (!item?.imageUrl) {
+          return item;
+        }
+        flowRepeatUses.set(item.imageUrl, (flowRepeatUses.get(item.imageUrl) || 0) + 1);
+        flowLastRepeatAt.set(item.imageUrl, nextIndex);
+        return item;
+      }
+
+      function pruneFlowRepeatMemory(nextIndex) {
+        for (let index = flowHistoryItems.length - 1; index >= 0; index -= 1) {
+          const item = flowHistoryItems[index];
+          if (nextIndex - Number(item.__flowSeenAt ?? 0) > FLOW_REPEAT_MAX_AGE) {
+            flowHistoryItems.splice(index, 1);
+          }
+        }
+        for (let index = flowMotifItems.length - 1; index >= 0; index -= 1) {
+          const item = flowMotifItems[index];
+          if (nextIndex - Number(item.__flowSeenAt ?? 0) > FLOW_REPEAT_MAX_AGE) {
+            flowMotifItems.splice(index, 1);
+          }
+        }
+        for (let index = flowMotifs.length - 1; index >= 0; index -= 1) {
+          const motif = flowMotifs[index];
+          motif.items = motif.items.filter((item) => nextIndex - Number(item.__flowSeenAt ?? 0) <= FLOW_REPEAT_MAX_AGE);
+          if (!motif.items.length || nextIndex - motif.createdAt > FLOW_REPEAT_MAX_AGE) {
+            flowMotifs.splice(index, 1);
+          }
+        }
+        for (const [imageUrl, lastRepeatAt] of flowLastRepeatAt.entries()) {
+          if (nextIndex - lastRepeatAt > FLOW_REPEAT_MAX_AGE) {
+            flowLastRepeatAt.delete(imageUrl);
+            flowRepeatUses.delete(imageUrl);
+          }
+        }
+      }
+
+      function cloneFlowItem(item, meta = {}) {
+        return {
+          ...item,
+          __repeatKind: meta.repeatKind || "",
+        };
+      }
+
+      function buildFlowItemElement(item) {
+        const link = document.createElement(item.__isGroup ? "div" : "a");
+        link.className = item.__isGroup ? "infinite-feed-item infinite-feed-group" : "infinite-feed-item";
+        if (!item.__isGroup) {
+          link.href = item.pageUrl || item.imageUrl;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+        }
+        link.dataset.imageUrl = item.imageUrl;
+        link.dataset.repeatKind = item.__repeatKind || "";
+        if (item.__isGroup) {
+          link.dataset.group = "true";
+          link.dataset.groupLayout = item.__groupLayout || "row";
+          link.dataset.groupCount = String(item.__groupItems?.length || 0);
+          const groupGrid = getFlowGroupGrid(item.__groupLayout || "row", item.__groupItems?.length || 1);
+          link.style.setProperty("--flow-group-count", String(item.__groupItems?.length || 1));
+          link.style.setProperty("--flow-group-columns", String(groupGrid.columns));
+          link.style.setProperty("--flow-group-rows", String(groupGrid.rows));
+          for (const groupItem of item.__groupItems || []) {
+            const cell = document.createElement("a");
+            cell.className = "flow-group-cell";
+            cell.style.setProperty("--flow-group-cell-index", String(link.children.length + 1));
+            cell.href = groupItem.pageUrl || groupItem.imageUrl;
+            cell.target = "_blank";
+            cell.rel = "noopener noreferrer";
+
+            const img = document.createElement("img");
+            img.className = "infinite-feed-image";
+            img.alt = groupItem.categoryName || groupItem.categoryPath || "MonotaRO product image";
+            img.loading = "eager";
+            img.decoding = "async";
+            img.src = buildImageProxyUrl(groupItem.imageUrl);
+
+            cell.append(img);
+            link.append(cell);
+          }
+        } else {
+          const img = document.createElement("img");
+          img.className = "infinite-feed-image";
+          img.alt = item.categoryName || item.categoryPath || "MonotaRO product image";
+          img.loading = "eager";
+          img.decoding = "async";
+          img.src = buildImageProxyUrl(item.imageUrl);
+
+          link.append(img);
+        }
+        link.dataset.category = item.categoryPath || item.categoryName || "";
+        const placementIndex = infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
+        applyFlowPlacement(link, item, placementIndex);
+        return link;
+      }
+
+      function offsetEmergencyFlowElement(element) {
+        if (displayMode === "list") {
+          return;
+        }
+        if (isMobileViewport()) {
+          element.style.marginTop = `${FLOW_EMERGENCY_REVEAL_GAP_PX}px`;
+          return;
+        }
+        const top = Number.parseFloat(element.style.top || "0");
+        if (!Number.isFinite(top)) {
+          return;
+        }
+        element.style.top = `${top + FLOW_EMERGENCY_REVEAL_GAP_PX}px`;
+        flowNextY += FLOW_EMERGENCY_REVEAL_GAP_PX;
+        infiniteFeedEl.style.minHeight = `${flowNextY + window.innerHeight}px`;
+      }
+
+      function getFlowGroupGrid(layout, count) {
+        const safeCount = Math.max(1, Number(count || 1));
+        if (layout === "column") {
+          return { columns: 1, rows: safeCount };
+        }
+        if (layout === "stair-down" || layout === "stair-up") {
+          return { columns: safeCount, rows: safeCount };
+        }
+        return { columns: safeCount, rows: 1 };
+      }
+
+      function applyFlowPlacement(element, item, index) {
+        if (displayMode === "list") {
+          applyListPlacement(element, item, index);
+          return;
+        }
+        if (isMobileViewport()) {
+          element.style.cssText = "";
+          return;
+        }
+
+        const imageUrl = item.imageUrl;
+        const seed = hashString(`${imageUrl}:${index}`);
+        const viewportWidth = Math.max(window.innerWidth, 960);
+        const sectionInfo = getFlowSectionInfo(index);
+        const sectionIndex = sectionInfo.index;
+        const sectionItemIndex = sectionInfo.itemIndex;
+        const layoutPattern = getFlowLayoutPattern(sectionIndex);
+        const sizePattern = getFlowSizePattern({ sectionIndex, seed });
+        const useGridSection = isFlowGridSection(layoutPattern);
+        const sectionLayout = useGridSection
+          ? getFlowSectionLayout({ sectionIndex, layoutPattern, viewportWidth })
+          : null;
+        if (!useGridSection && sectionItemIndex === 0) {
+          openFlowSectionSpace(sectionIndex);
+        }
+        const strictGridCell = getStrictSectionGridCell({
+          layoutPattern,
+          sectionLayout,
+          sectionInfo,
+          viewportWidth,
+        });
+        const itemWidth = strictGridCell
+          ? strictGridCell.itemSize
+          : getFlowItemWidth({
+              index: sectionItemIndex,
+              globalIndex: index,
+              seed,
+              viewportWidth,
+              layoutPattern,
+              sizePattern,
+              unitKind: item.__isGroup ? "group" : "single",
+              groupLayout: item.__groupLayout || "",
+              groupCount: item.__groupCount || 1,
+            });
+        const itemHeight = strictGridCell
+          ? strictGridCell.itemSize
+          : Math.round(itemWidth * getFlowUnitHeightRatio(item));
+        const maxLeft = Math.max(32, viewportWidth - itemWidth - 56);
+        const preferredLeft = getFlowPreferredLeft({
+          index: sectionItemIndex,
+          seed,
+          viewportWidth,
+          itemWidth,
+          maxLeft,
+          layoutPattern,
+          sectionIndex,
+        });
+        const bandOffset = getFlowBandOffset({ index: sectionItemIndex, seed, itemHeight, layoutPattern });
+        let left = strictGridCell ? strictGridCell.left : preferredLeft;
+        let top = strictGridCell ? strictGridCell.top : Math.max(24, (sectionLayout ? sectionLayout.top : flowNextY) + bandOffset);
+        const step = getFlowStep({ index: sectionItemIndex, seed, itemHeight, layoutPattern, sectionIndex });
+        const gap = item.__isGroup
+          ? 44
+          : layoutPattern === "constellation"
+            ? 40
+            : 36;
+        let candidate = null;
+
+        for (let attempt = 0; attempt < (strictGridCell ? 1 : 28); attempt += 1) {
+          const attemptSeed = hashString(`${seed}:${attempt}`);
+          left = strictGridCell
+            ? strictGridCell.left
+            : attempt === 0
+            ? preferredLeft
+            : getFlowFallbackLeft({ attemptSeed, viewportWidth, itemWidth, maxLeft, layoutPattern });
+          top = strictGridCell ? strictGridCell.top : top;
+          candidate = { x: left - gap, y: top - gap, width: itemWidth + gap * 2, height: itemHeight + gap * 2 };
+          const hasOverlap = flowPlacedRects.some((rect) => rectanglesOverlap(candidate, rect));
+          if (!hasOverlap) {
+            break;
+          }
+          if (attempt % 4 === 3) {
+            top += Math.round(itemHeight * 0.62);
+          }
+        }
+
+        let settleAttempt = 0;
+        while (
+          !strictGridCell &&
+          candidate &&
+          flowPlacedRects.some((rect) => rectanglesOverlap(candidate, rect)) &&
+          settleAttempt < 40
+        ) {
+          top += Math.round(itemHeight * 0.72);
+          candidate = { x: left - gap, y: top - gap, width: itemWidth + gap * 2, height: itemHeight + gap * 2 };
+          settleAttempt += 1;
+        }
+
+        element.style.left = `${left}px`;
+        element.style.top = `${top}px`;
+        element.style.width = `${itemWidth}px`;
+        element.style.height = `${itemHeight}px`;
+        element.dataset.sectionIndex = String(sectionIndex);
+        element.dataset.itemIndex = String(sectionItemIndex);
+        element.dataset.layoutPattern = layoutPattern;
+        element.dataset.sizePattern = sizePattern;
+        element.dataset.unit = item.__isGroup ? "group" : "image";
+        const placementLabel = getFlowPlacementLabel(layoutPattern);
+        element.dataset.debugLabel = [
+          `S${sectionIndex}`,
+          placementLabel,
+          item.__isGroup ? `group:${item.__groupLayout || "row"}` : "image",
+          item.categoryPath || item.categoryName || "",
+        ].filter(Boolean).join(" / ");
+        flowPlacedRects.push({ x: left, y: top, width: itemWidth, height: itemHeight });
+        flowPlacedItems.push({
+          item,
+          side: left + itemWidth / 2 < viewportWidth / 2 ? "left" : "right",
+          wasLarge: itemWidth > viewportWidth * 0.34,
+        });
+        if (flowPlacedItems.length > 80) {
+          flowPlacedItems.shift();
+        }
+        if (sectionLayout) {
+          sectionLayout.bottom = Math.max(sectionLayout.bottom, top + itemHeight);
+          updateFlowSectionGuide({
+            sectionIndex,
+            layoutPattern,
+            top: sectionLayout.top,
+            bottom: sectionLayout.top + sectionLayout.height,
+          });
+          flowNextY = Math.max(flowNextY, sectionLayout.top + sectionLayout.height, sectionLayout.bottom + 80);
+        } else {
+          updateFlowSectionGuide({ sectionIndex, layoutPattern, top: Math.max(24, flowNextY), bottom: top + itemHeight });
+          flowNextY = Math.max(flowNextY + step, top + itemHeight * 0.68);
+        }
+        infiniteFeedEl.style.minHeight = `${flowNextY + window.innerHeight}px`;
+      }
+
+      function isFlowGridSection(layoutPattern) {
+        return new Set([
+          "big-left-right",
+          "big-with-small-row",
+          "center-medium-row",
+          "same-size-horizontal",
+          "same-size-vertical",
+          "big-with-group",
+          "center-max-triplet",
+          "loose-row",
+          "single-row",
+        ]).has(layoutPattern);
+      }
+
+      function isStrictFlowGridSection(layoutPattern) {
+        return layoutPattern === "big-left-right" || layoutPattern === "single-row";
+      }
+
+      function getFlowPlacementLabel(layoutPattern) {
+        return isStrictFlowGridSection(layoutPattern) ? layoutPattern : `offgrid:${layoutPattern}`;
+      }
+
+      function getFlowLayoutPattern(sectionIndex) {
+        const phraseOffset = Math.floor(sectionIndex / 6);
+        const syncopation = sectionIndex % 7 === 4 ? 3 : sectionIndex % 11 === 8 ? 5 : 0;
+        return FLOW_LAYOUT_PATTERNS[(sectionIndex + phraseOffset + syncopation) % FLOW_LAYOUT_PATTERNS.length];
+      }
+
+      function getFlowSizePattern({ sectionIndex, seed }) {
+        if (sectionIndex > 3 && sectionIndex % 7 === 4) {
+          return "small-heavy";
+        }
+        return FLOW_SIZE_PATTERNS[(sectionIndex + Math.floor(seed / 1000)) % FLOW_SIZE_PATTERNS.length];
+      }
+
+      function getFlowSectionInfo(globalIndex) {
+        let start = 0;
+        let sectionIndex = 0;
+        while (true) {
+          const itemCount = getFlowSectionItemCount(sectionIndex);
+          if (globalIndex < start + itemCount) {
+            return {
+              index: sectionIndex,
+              itemIndex: globalIndex - start,
+              itemCount,
+              start,
+            };
+          }
+          start += itemCount;
+          sectionIndex += 1;
+        }
+      }
+
+      function applyListPlacement(element, item, index) {
+        element.style.left = "";
+        element.style.top = "";
+        element.style.width = "";
+        element.style.height = "";
+        element.style.marginTop = "";
+        element.style.transform = "";
+        element.dataset.sectionIndex = "";
+        element.dataset.itemIndex = String(index);
+        element.dataset.layoutPattern = "list";
+        element.dataset.sizePattern = "list";
+        element.dataset.unit = item.__isGroup ? "group" : "image";
+        element.dataset.debugLabel = [
+          `L${index}`,
+          item.__isGroup ? `group:${item.__groupLayout || "row"}` : "image",
+          item.categoryPath || item.categoryName || "",
+        ].filter(Boolean).join(" / ");
+        flowPlacedItems.push({
+          item,
+          side: "center",
+          wasLarge: false,
+        });
+        if (flowPlacedItems.length > 80) {
+          flowPlacedItems.shift();
+        }
+      }
+
+      function getFlowSectionItemCount(sectionIndex) {
+        const layoutPattern = getFlowLayoutPattern(sectionIndex);
+        if (layoutPattern === "big-left-right") {
+          return 2;
+        }
+        if (layoutPattern === "single-row") {
+          return getSingleRowColumnCount(sectionIndex);
+        }
+        if (layoutPattern === "loose-row") {
+          return getLooseRowColumnCount(sectionIndex);
+        }
+        if (layoutPattern === "big-with-group") {
+          return 2;
+        }
+        const cycle = sectionIndex % 10;
+        if (cycle === 2 || cycle === 8) {
+          return 4;
+        }
+        if (cycle === 5) {
+          return 3;
+        }
+        if (cycle === 7) {
+          return 12;
+        }
+        return FLOW_SECTION_DEFAULT_ITEM_COUNT;
+      }
+
+      function openFlowSectionSpace(sectionIndex) {
+        if (sectionIndex <= 0) {
+          return;
+        }
+        const sectionGapSeed = hashString(`section-gap:${sectionIndex}`);
+        const phraseBreak = sectionIndex % 5 === 0 || sectionIndex % 9 === 4;
+        const baseGap = phraseBreak
+          ? window.innerHeight * 0.62 + (sectionGapSeed % 420)
+          : window.innerHeight * 0.46 + (sectionGapSeed % 340);
+        const sectionGap = clamp(baseGap, phraseBreak ? 620 : 440, phraseBreak ? 1180 : 920);
+        flowNextY += Math.round(sectionGap);
+      }
+
+      function getFlowSectionLayout({ sectionIndex, layoutPattern, viewportWidth }) {
+        const existing = flowSectionLayouts.get(sectionIndex);
+        if (existing) {
+          return existing;
+        }
+
+        openFlowSectionSpace(sectionIndex);
+
+        const height = getFlowSectionHeight({ layoutPattern, viewportWidth, sectionIndex });
+        const layout = {
+          top: Math.max(24, flowNextY),
+          height,
+          bottom: Math.max(24, flowNextY),
+        };
+        flowSectionLayouts.set(sectionIndex, layout);
+        flowNextY = Math.max(flowNextY, layout.top + layout.height);
+        return layout;
+      }
+
+      function updateFlowSectionGuide({ sectionIndex, layoutPattern, top, bottom }) {
+        if (isMobileViewport()) {
+          return;
+        }
+        let guide = flowSectionGuides.get(sectionIndex);
+        if (!guide) {
+          guide = document.createElement("div");
+          guide.className = "flow-section-guide";
+          guide.dataset.sectionIndex = String(sectionIndex);
+          infiniteFeedEl.appendChild(guide);
+          flowSectionGuides.set(sectionIndex, guide);
+        }
+        const previousTop = Number(guide.dataset.top || top);
+        const previousBottom = Number(guide.dataset.bottom || bottom);
+        const nextTop = Math.min(previousTop, top);
+        const nextBottom = Math.max(previousBottom, bottom);
+        guide.dataset.top = String(nextTop);
+        guide.dataset.bottom = String(nextBottom);
+        guide.dataset.layoutPattern = layoutPattern;
+        guide.dataset.debugLabel = `Section ${sectionIndex} / ${getFlowPlacementLabel(layoutPattern)}`;
+        const grid = getFlowSectionGrid(layoutPattern, sectionIndex);
+        guide.style.setProperty("--flow-section-columns", String(grid.columns));
+        guide.style.setProperty("--flow-section-rows", String(grid.rows));
+        guide.style.top = `${nextTop}px`;
+        guide.style.height = `${Math.max(80, nextBottom - nextTop)}px`;
+      }
+
+      function getFlowSectionGrid(layoutPattern, sectionIndex = 0) {
+        if (layoutPattern === "big-left-right") {
+          return { columns: 2, rows: 1 };
+        }
+        if (layoutPattern === "loose-row") {
+          return { columns: getLooseRowColumnCount(sectionIndex), rows: 1 };
+        }
+        if (layoutPattern === "single-row") {
+          return { columns: getSingleRowColumnCount(sectionIndex), rows: 1 };
+        }
+        if (layoutPattern === "center-max-triplet") {
+          return { columns: 3, rows: 1 };
+        }
+        if (layoutPattern === "big-with-group" || layoutPattern === "wide-pair") {
+          return { columns: 2, rows: 1 };
+        }
+        if (layoutPattern === "big-with-small-row") {
+          return { columns: 4, rows: 1 };
+        }
+        if (layoutPattern === "center-medium-row" || layoutPattern === "same-size-horizontal") {
+          return { columns: 4, rows: 1 };
+        }
+        if (layoutPattern === "same-size-vertical") {
+          return { columns: 2, rows: 3 };
+        }
+        if (layoutPattern === "grid-hang") {
+          return { columns: 5, rows: 2 };
+        }
+        if (layoutPattern === "constellation") {
+          return { columns: 5, rows: 3 };
+        }
+        return { columns: 6, rows: 3 };
+      }
+
+      function getStrictSectionGridCell({ layoutPattern, sectionLayout, sectionInfo, viewportWidth }) {
+        if (!sectionLayout || !isStrictFlowGridSection(layoutPattern)) {
+          return null;
+        }
+        const grid = getFlowSectionGrid(layoutPattern, sectionInfo.index);
+        const outerMargin = layoutPattern === "single-row" ? 28 : 32;
+        const gutter = layoutPattern === "single-row" ? 20 : 28;
+        const availableWidth = Math.max(320, viewportWidth - outerMargin * 2 - gutter * (grid.columns - 1));
+        const availableHeight = Math.max(240, sectionLayout.height - gutter * (grid.rows - 1));
+        const cellSize = Math.floor(Math.min(availableWidth / grid.columns, availableHeight / grid.rows));
+        const gridWidth = cellSize * grid.columns + gutter * (grid.columns - 1);
+        const gridHeight = cellSize * grid.rows + gutter * (grid.rows - 1);
+        const gridLeft = Math.round((viewportWidth - gridWidth) / 2);
+        const gridTop = Math.round(sectionLayout.top + Math.max(0, (sectionLayout.height - gridHeight) / 2));
+        const column = sectionInfo.itemIndex % grid.columns;
+        const row = Math.floor(sectionInfo.itemIndex / grid.columns);
+        const inset = layoutPattern === "single-row" ? 6 : 8;
+        return {
+          left: gridLeft + column * (cellSize + gutter) + inset,
+          top: gridTop + row * (cellSize + gutter) + inset,
+          itemSize: Math.max(80, cellSize - inset * 2),
+          gridTop,
+          gridHeight,
+        };
+      }
+
+      function getSingleRowColumnCount(sectionIndex) {
+        return 5 + (hashString(`single-row-columns:${sectionIndex}`) % 4);
+      }
+
+      function getLooseRowColumnCount(sectionIndex) {
+        return 5 + (hashString(`loose-row-columns:${sectionIndex}`) % 5);
+      }
+
+      function clearFlowSectionGuides() {
+        flowSectionGuides.forEach((guide) => guide.remove());
+        flowSectionGuides.clear();
+      }
+
+      function getFlowSectionHeight({ layoutPattern, viewportWidth, sectionIndex }) {
+        const seed = hashString(`section-height:${layoutPattern}:${sectionIndex}`);
+        if (layoutPattern === "loose-row" || layoutPattern === "single-row") {
+          return Math.round(clamp(viewportWidth * 0.24 + (seed % 120), 300, 520));
+        }
+        if (layoutPattern === "big-with-group") {
+          return Math.round(clamp(viewportWidth * 0.52 + (seed % 180), 680, 1080));
+        }
+        if (layoutPattern === "big-left-right") {
+          return Math.round(clamp(viewportWidth * 0.48 + (seed % 100), 560, 920));
+        }
+        if (layoutPattern === "single-row") {
+          return Math.round(clamp(viewportWidth * 0.26 + (seed % 80), 280, 460));
+        }
+        if (layoutPattern === "center-max-triplet") {
+          return Math.round(clamp(viewportWidth * 0.46 + (seed % 180), 620, 960));
+        }
+        if (layoutPattern === "same-size-vertical") {
+          return Math.round(clamp(viewportWidth * 0.54 + (seed % 180), 680, 1080));
+        }
+        if (layoutPattern === "constellation") {
+          return Math.round(clamp(viewportWidth * 0.42 + (seed % 220), 560, 920));
+        }
+        return Math.round(clamp(viewportWidth * 0.38 + (seed % 180), 520, 860));
+      }
+
+      function getFlowItemWidth({ index, globalIndex, seed, viewportWidth, layoutPattern, sizePattern, unitKind = "single", groupLayout = "", groupCount = 1 }) {
+        const tiny = [150, 210];
+        const small = [190, 280];
+        const medium = [270, 390];
+        const large = [420, 620];
+        const wide = [460, 700];
+        const roll = (seed % 1000) / 1000;
+        let range = small;
+
+        if (layoutPattern === "constellation") {
+          range = index % 4 === 0 ? medium : tiny;
+        } else if (layoutPattern === "loose-row") {
+          range = [110, 170];
+        } else if (layoutPattern === "single-row") {
+          range = [180, 260];
+        } else if (globalIndex % 13 === 0) {
+          range = large;
+        } else if (layoutPattern === "big-with-group") {
+          range = unitKind === "group" ? [310, 460] : [460, 680];
+        } else if (layoutPattern === "big-left-right") {
+          range = large;
+        } else if (layoutPattern === "center-max-triplet") {
+          range = [480, 720];
+        } else if (layoutPattern === "same-size-horizontal" || layoutPattern === "same-size-vertical") {
+          range = index % 6 < 3 ? small : medium;
+        } else if (layoutPattern === "big-with-small-row") {
+          const role = index % 4;
+          range = role === 0 ? large : tiny;
+        } else if (layoutPattern === "center-medium-row") {
+          range = medium;
+        } else if (layoutPattern === "anchor-small") {
+          range = index % 5 === 0 ? large : (index % 2 === 0 ? tiny : small);
+        } else if (layoutPattern === "wide-pair") {
+          range = index % 2 === 0 ? wide : small;
+        } else if (sizePattern === "binary") {
+          range = index % 3 === 0 ? large : tiny;
+        } else if (sizePattern === "anchor-scale") {
+          range = index % 6 === 0 ? large : medium;
+        } else if (sizePattern === "medium-run") {
+          range = medium;
+        }
+
+        const easedRoll = sizePattern === "small-heavy" ? roll ** 2.1 : roll ** 1.25;
+        let width = range[0] + easedRoll * (range[1] - range[0]);
+        if (unitKind === "group") {
+          const groupScale = groupLayout === "column"
+            ? 0.88
+            : groupLayout.startsWith("stair")
+              ? 1.18 + groupCount * 0.08
+              : 1.34 + groupCount * 0.12;
+          width *= layoutPattern === "big-with-group" ? Math.min(groupScale, 1.28) : groupScale;
+        }
+        return Math.round(clamp(width, 110, viewportWidth * (unitKind === "group" ? 0.64 : 0.52)));
+      }
+
+      function getFlowUnitHeightRatio(item) {
+        if (!item.__isGroup) {
+          return 1.42;
+        }
+        const count = Math.max(1, Number(item.__groupCount || item.__groupItems?.length || 1));
+        if (item.__groupLayout === "column") {
+          return count === 3 ? 2.18 : 1.56;
+        }
+        if (item.__groupLayout?.startsWith("stair")) {
+          return count === 3 ? 0.92 : 0.76;
+        }
+        return count === 3 ? 0.42 : 0.56;
+      }
+
+      function getFlowPreferredLeft({ index, seed, viewportWidth, itemWidth, maxLeft, layoutPattern, sectionIndex = 0 }) {
+        const margin = 48;
+        const gridColumns = [0.08, 0.28, 0.48, 0.68, 0.84];
+        if (layoutPattern === "grid-hang") {
+          const column = gridColumns[index % gridColumns.length];
+          return clamp(Math.round(viewportWidth * column - itemWidth / 2), margin, maxLeft);
+        }
+        if (layoutPattern === "anchor-small") {
+          if (index % 5 === 0) {
+            return index % 10 === 0 ? margin + 24 : maxLeft - 24;
+          }
+          const sideColumn = index % 2 === 0 ? 0.35 : 0.66;
+          return clamp(Math.round(viewportWidth * sideColumn - itemWidth / 2), margin, maxLeft);
+        }
+        if (layoutPattern === "constellation") {
+          const clusterColumns = [0.22, 0.42, 0.58, 0.74, 0.33];
+          return clamp(Math.round(viewportWidth * clusterColumns[index % clusterColumns.length] - itemWidth / 2), margin, maxLeft);
+        }
+        if (layoutPattern === "big-with-small-row") {
+          const role = index % 4;
+          const anchorLeft = index % 8 < 4 ? 0.17 : 0.52;
+          const smallStart = anchorLeft < 0.3 ? 0.5 : 0.18;
+          if (role === 0) {
+            return clamp(Math.round(viewportWidth * anchorLeft), margin, maxLeft);
+          }
+          return clamp(Math.round(viewportWidth * (smallStart + (role - 1) * 0.1)), margin, maxLeft);
+        }
+        if (layoutPattern === "center-medium-row") {
+          const rowCount = 3 + (Math.floor(seed / 2000) % 2);
+          const role = index % rowCount;
+          const totalWidth = rowCount * itemWidth + (rowCount - 1) * 42;
+          const start = (viewportWidth - totalWidth) / 2;
+          return clamp(Math.round(start + role * (itemWidth + 42)), margin, maxLeft);
+        }
+        if (layoutPattern === "same-size-horizontal") {
+          const groupCount = 2 + (Math.floor(seed / 3000) % 2);
+          const role = index % groupCount;
+          const itemGap = 22;
+          const totalWidth = groupCount * itemWidth + (groupCount - 1) * itemGap;
+          const start = (viewportWidth - totalWidth) / 2;
+          return clamp(Math.round(start + role * (itemWidth + itemGap)), margin, maxLeft);
+        }
+        if (layoutPattern === "same-size-vertical") {
+          const side = Math.floor(index / 3) % 2 === 0 ? 0.22 : 0.62;
+          return clamp(Math.round(viewportWidth * side), margin, maxLeft);
+        }
+        if (layoutPattern === "wide-pair") {
+          const side = index % 2 === 0 ? 0.18 : 0.62;
+          return clamp(Math.round(viewportWidth * side), margin, maxLeft);
+        }
+        if (layoutPattern === "big-with-group") {
+          const bigOnLeft = sectionIndex % 2 === 0;
+          const side = index === 0
+            ? (bigOnLeft ? 0.10 : 0.55)
+            : (bigOnLeft ? 0.56 : 0.12);
+          return clamp(Math.round(viewportWidth * side), margin, maxLeft);
+        }
+        if (layoutPattern === "big-left-right") {
+          const itemGap = 72;
+          const totalWidth = itemWidth * 2 + itemGap;
+          const start = (viewportWidth - totalWidth) / 2;
+          return clamp(Math.round(start + (index % 2) * (itemWidth + itemGap)), margin, maxLeft);
+        }
+        if (layoutPattern === "center-max-triplet") {
+          const role = index % 3;
+          const itemGap = 34;
+          const totalWidth = itemWidth * 3 + itemGap * 2;
+          const start = (viewportWidth - totalWidth) / 2;
+          return clamp(Math.round(start + role * (itemWidth + itemGap)), margin, maxLeft);
+        }
+        if (layoutPattern === "loose-row") {
+          const rowCount = getLooseRowColumnCount(sectionIndex);
+          const column = index % rowCount;
+          const gridGap = 28;
+          const totalWidth = itemWidth * rowCount + gridGap * (rowCount - 1);
+          const start = (viewportWidth - totalWidth) / 2;
+          return clamp(Math.round(start + column * (itemWidth + gridGap)), margin, maxLeft);
+        }
+        if (layoutPattern === "single-row") {
+          const rowCount = 5 + (Math.floor(seed / 5000) % 4);
+          const role = index % rowCount;
+          const itemGap = 36;
+          const totalWidth = itemWidth * rowCount + itemGap * (rowCount - 1);
+          const start = (viewportWidth - totalWidth) / 2;
+          return clamp(Math.round(start + role * (itemWidth + itemGap)), margin, maxLeft);
+        }
+        const offGridRoll = ((Math.floor(seed / 1000)) % 1000) / 1000;
+        return Math.round(margin + offGridRoll * (maxLeft - margin));
+      }
+
+      function getFlowFallbackLeft({ attemptSeed, viewportWidth, itemWidth, maxLeft, layoutPattern }) {
+        if (layoutPattern === "grid-hang") {
+          const gridColumns = [0.08, 0.28, 0.48, 0.68, 0.84];
+          const column = gridColumns[attemptSeed % gridColumns.length];
+          return clamp(Math.round(viewportWidth * column - itemWidth / 2), 48, maxLeft);
+        }
+        return Math.round(48 + ((attemptSeed % 1000) / 1000) * (maxLeft - 48));
+      }
+
+      function getFlowBandOffset({ index, seed, itemHeight, layoutPattern }) {
+        const jitter = ((Math.floor(seed / 1000000) % 91) - 45);
+        if (layoutPattern === "grid-hang") {
+          return (index % 2 === 0 ? 0 : Math.round(itemHeight * 0.22)) + jitter;
+        }
+        if (layoutPattern === "constellation") {
+          return Math.round((index % 5) * itemHeight * 0.12) + jitter;
+        }
+        if (layoutPattern === "big-with-small-row") {
+          const role = index % 4;
+          return role === 0 ? jitter : Math.round(itemHeight * 0.28) + jitter;
+        }
+        if (layoutPattern === "center-medium-row") {
+          const rowCount = 3 + (Math.floor(seed / 2000) % 2);
+          return Math.round((index % rowCount) * 12) + jitter * 0.35;
+        }
+        if (layoutPattern === "same-size-horizontal") {
+          const groupCount = 2 + (Math.floor(seed / 3000) % 2);
+          return Math.round((index % groupCount) * 8) + jitter * 0.2;
+        }
+        if (layoutPattern === "same-size-vertical") {
+          const groupCount = 2 + (Math.floor(seed / 3000) % 2);
+          return Math.round((index % groupCount) * (itemHeight + 24)) + jitter * 0.2;
+        }
+        if (layoutPattern === "anchor-small") {
+          return index % 5 === 0 ? jitter : Math.round(itemHeight * 0.34) + jitter;
+        }
+        if (layoutPattern === "wide-pair") {
+          return index % 2 === 0 ? jitter : Math.round(itemHeight * 0.4) + jitter;
+        }
+        if (layoutPattern === "big-left-right") {
+          return 0;
+        }
+        if (layoutPattern === "big-with-group") {
+          return index === 0 ? jitter : Math.round(itemHeight * 0.16) + jitter;
+        }
+        if (layoutPattern === "center-max-triplet") {
+          return Math.round((index % 3) * 10) + jitter * 0.25;
+        }
+        if (layoutPattern === "loose-row") {
+          return Math.round((index % 3) * 6) + jitter * 0.08;
+        }
+        if (layoutPattern === "single-row") {
+          return Math.round((index % 3) * 8) + jitter * 0.2;
+        }
+        return jitter;
+      }
+
+      function getFlowStep({ index, seed, itemHeight, layoutPattern, sectionIndex = 0 }) {
+        if (layoutPattern === "constellation") {
+          return Math.round(itemHeight * 0.42) + ((Math.floor(seed / 1089000)) % 80);
+        }
+        if (layoutPattern === "big-with-small-row") {
+          return index % 4 === 3
+            ? Math.round(itemHeight * 0.72) + ((Math.floor(seed / 1089000)) % 100)
+            : Math.round(itemHeight * 0.18);
+        }
+        if (layoutPattern === "center-medium-row") {
+          const rowCount = 3 + (Math.floor(seed / 2000) % 2);
+          return index % rowCount === rowCount - 1
+            ? Math.round(itemHeight * 0.64) + ((Math.floor(seed / 1089000)) % 110)
+            : Math.round(itemHeight * 0.12);
+        }
+        if (layoutPattern === "same-size-horizontal") {
+          const groupCount = 2 + (Math.floor(seed / 3000) % 2);
+          return index % groupCount === groupCount - 1
+            ? Math.round(itemHeight * 0.72) + ((Math.floor(seed / 1089000)) % 100)
+            : Math.round(itemHeight * 0.08);
+        }
+        if (layoutPattern === "same-size-vertical") {
+          const groupCount = 2 + (Math.floor(seed / 3000) % 2);
+          return index % groupCount === groupCount - 1
+            ? Math.round(itemHeight * 0.48) + ((Math.floor(seed / 1089000)) % 90)
+            : Math.round(itemHeight * 0.04);
+        }
+        if (layoutPattern === "anchor-small") {
+          return Math.round(itemHeight * 0.58) + ((Math.floor(seed / 1089000)) % 120);
+        }
+        if (layoutPattern === "wide-pair") {
+          return Math.round(itemHeight * 0.5) + ((Math.floor(seed / 1089000)) % 140);
+        }
+        if (layoutPattern === "big-left-right") {
+          return index % 2 === 1
+            ? Math.round(itemHeight * 0.9)
+            : 0;
+        }
+        if (layoutPattern === "big-with-group") {
+          return index === 1
+            ? Math.round(itemHeight * 0.82) + ((Math.floor(seed / 1089000)) % 120)
+            : Math.round(itemHeight * 0.12);
+        }
+        if (layoutPattern === "center-max-triplet") {
+          return index % 3 === 2
+            ? Math.round(itemHeight * 0.82) + ((Math.floor(seed / 1089000)) % 120)
+            : Math.round(itemHeight * 0.1);
+        }
+        if (layoutPattern === "loose-row") {
+          const rowCount = getLooseRowColumnCount(sectionIndex);
+          return index % rowCount === rowCount - 1
+            ? Math.round(itemHeight * 0.72)
+            : Math.round(itemHeight * 0.04);
+        }
+        if (layoutPattern === "single-row") {
+          const rowCount = 5 + (Math.floor(seed / 5000) % 4);
+          return index % rowCount === rowCount - 1
+            ? Math.round(itemHeight * 0.92) + ((Math.floor(seed / 1089000)) % 100)
+            : Math.round(itemHeight * 0.06);
+        }
+        return Math.round(itemHeight * 0.52) + ((Math.floor(seed / 1089000)) % 130);
+      }
+
+      function relayoutFlowItems() {
+        flowNextY = 0;
+        flowPlacedRects.length = 0;
+        flowPlacedItems.length = 0;
+        flowSectionLayouts.clear();
+        clearFlowSectionGuides();
+        infiniteFeedEl.style.minHeight = "";
+        Array.from(infiniteFeedEl.querySelectorAll(".infinite-feed-item")).forEach((element, index) => {
+          applyFlowPlacement(
+            element,
+            {
+              imageUrl: element.dataset.imageUrl || String(index),
+              __repeatKind: element.dataset.repeatKind || "",
+              __isGroup: element.dataset.group === "true",
+              __groupLayout: element.dataset.groupLayout || "",
+              __groupCount: Number(element.dataset.groupCount || 1),
+            },
+            index,
+          );
+        });
+      }
+
+      async function appendFlowItems(count, options = {}) {
+        if (isFlowAppending || !isFeedDisplayMode()) {
+          if (cacheImageItems.length > 0) {
+            extendFlowLoadingBuffer();
+          }
+          return;
+        }
+        if (!infiniteFeedEl.children.length && cacheImageItems.length < FLOW_FIRST_DISPLAY_COUNT) {
+          ensureCacheStock();
+          updateFlowLoader(`Waiting for first ${FLOW_FIRST_DISPLAY_COUNT} images ${cacheImageItems.length}/${FLOW_FIRST_DISPLAY_COUNT}`, 74);
+          return;
+        }
+        const emergencyAtStart = cacheImageItems.length === 0 && shouldUseEmergencyFlow();
+        isFlowAppending = true;
+        if (cacheImageItems.length > 0) {
+          extendFlowLoadingBuffer();
+        }
+        updateFlowLoader("Adding images...");
+        try {
+          let appended = 0;
+          const targetAppendCount = emergencyAtStart
+            ? 1
+            : options.exact
+            ? count
+            : getFlowAppendCount(count);
+          if (targetAppendCount <= 0) {
+            return;
+          }
+          while (appended < targetAppendCount) {
+            let item = takeNextFlowItem();
+            if (!item) {
+              ensureCacheStock();
+              item = takeEmergencyFlowItem();
+              if (!item) {
+                trimFlowLoadingBuffer();
+                break;
+              }
+            }
+            const element = buildFlowItemElement(item);
+            if (emergencyAtStart) {
+              offsetEmergencyFlowElement(element);
+            }
+            if (infiniteFeedEl.querySelectorAll(".infinite-feed-item").length < FLOW_FIRST_DISPLAY_COUNT) {
+              element.dataset.initialReveal = "true";
+              element.style.animationDelay = `${appended * 120}ms`;
+            }
+            infiniteFeedEl.appendChild(element);
+            appended += 1;
+          }
+          if (appended > 0) {
+            updateAutoScrollMode();
+          }
+          refreshCacheUi();
+          ensureCacheStock();
+        } finally {
+          isFlowAppending = false;
+          updateFlowLoader();
+          if (displayMode === "flow" && getScrollRemainingPx() < FLOW_AHEAD_PX * 1.25 && (cacheImageItems.length > 0 || shouldUseEmergencyFlow())) {
+            window.requestAnimationFrame(() => maintainInfiniteFeed());
+          }
+        }
+      }
+
+      function getFlowAppendCount(requestedCount) {
+        if (displayMode === "list") {
+          return Math.max(0, getListTargetCount() - infiniteFeedEl.querySelectorAll(".infinite-feed-item").length);
+        }
+        if (isMobileViewport()) {
+          return requestedCount;
+        }
+        const placedCount = infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
+        const sectionInfo = getFlowSectionInfo(placedCount);
+        const itemsToSectionEnd = sectionInfo.itemIndex === 0
+          ? sectionInfo.itemCount
+          : sectionInfo.itemCount - sectionInfo.itemIndex;
+        return Math.max(requestedCount, itemsToSectionEnd);
+      }
+
+      function getListTargetCount() {
+        const frameWidth = Math.max(320, (window.innerWidth || 960) * 0.92);
+        const frameHeight = Math.max(320, (window.innerHeight || 720) * 0.92);
+        const columns = Math.max(2, Math.floor(frameWidth / LIST_GRID_MIN_CELL_PX));
+        const rows = Math.max(2, Math.floor(frameHeight / LIST_GRID_ROW_HEIGHT_PX));
+        return Math.max(4, Math.min(48, columns * rows));
+      }
+
+      function getScrollRemainingPx() {
+        const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
+        const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+        const docHeight = Math.max(
+          document.body.scrollHeight,
+          document.documentElement.scrollHeight,
+          infiniteFeedEl.getBoundingClientRect().bottom + scrollTop,
+        );
+        return docHeight - (scrollTop + viewportHeight);
+      }
+
+      function getFlowContentRemainingPx() {
+        if (displayMode === "list") {
+          return getScrollRemainingPx();
+        }
+        if (isMobileViewport()) {
+          return getScrollRemainingPx();
+        }
+        const scrollTop = window.scrollY || document.documentElement.scrollTop || 0;
+        const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+        return flowNextY - (scrollTop + viewportHeight);
+      }
+
+      function maintainInfiniteFeed() {
+        if (!isFeedDisplayMode()) {
+          return;
+        }
+        if (displayMode === "list") {
+          const missingCount = getListTargetCount() - infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
+          if (missingCount > 0 && !isFlowAppending) {
+            appendFlowItems(missingCount, { exact: true });
+          }
+          return;
+        }
+        if (!infiniteFeedEl.children.length && cacheImageItems.length < FLOW_FIRST_DISPLAY_COUNT) {
+          ensureCacheStock();
+          return;
+        }
+        if (getScrollRemainingPx() < FLOW_AHEAD_PX * 1.4 && cacheImageItems.length > 0) {
+          extendFlowLoadingBuffer();
+        }
+        if (isFlowAppending) {
+          return;
+        }
+        let guard = 0;
+        while (getScrollRemainingPx() < FLOW_AHEAD_PX && guard < 2) {
+          appendFlowItems(FLOW_APPEND_BATCH);
+          guard += 1;
+          if (cacheImageItems.length === 0 && !shouldUseEmergencyFlow()) {
+            break;
+          }
+        }
+      }
+
+      async function prefillFlowAhead(maxRounds = 3) {
+        if (!isFeedDisplayMode()) {
+          return;
+        }
+        for (let round = 0; round < maxRounds; round += 1) {
+          if (getScrollRemainingPx() >= FLOW_AHEAD_PX) {
+            break;
+          }
+          if (cacheImageItems.length === 0 && !shouldUseEmergencyFlow()) {
+            ensureCacheStock();
+            break;
+          }
+          await appendFlowItems(FLOW_APPEND_BATCH);
+        }
+      }
+
+      function resetFlowFeed() {
+        infiniteFeedEl.textContent = "";
+        infiniteFeedEl.style.minHeight = "";
+        flowNextY = 0;
+        flowPlacedRects.length = 0;
+        flowSectionLayouts.clear();
+        flowSectionGuides.clear();
+        flowSeenImageUrls.clear();
+        flowHistoryItems.length = 0;
+        flowMotifItems.length = 0;
+        flowMotifs.length = 0;
+        flowMotifDraft.length = 0;
+        flowPlacedItems.length = 0;
+        flowRepeatUses.clear();
+        flowLastRepeatAt.clear();
+      }
+
+      async function startFlowMode() {
+        if (!infiniteFeedEl.children.length && cacheImageItems.length < FLOW_FIRST_DISPLAY_COUNT) {
+          ensureCacheStock();
+          updateFlowLoader(`Waiting for first ${FLOW_FIRST_DISPLAY_COUNT} images ${cacheImageItems.length}/${FLOW_FIRST_DISPLAY_COUNT}`, 74);
+          return;
+        }
+        if (!infiniteFeedEl.children.length) {
+          await appendFlowItems(FLOW_FIRST_DISPLAY_COUNT, { exact: true });
+          await prefillFlowAhead();
+          window.requestAnimationFrame(() => maintainInfiniteFeed());
+          return;
+        }
+        maintainInfiniteFeed();
+      }
+
+      async function startListMode() {
+        relayoutFlowItems();
+        const targetCount = getListTargetCount();
+        if (!infiniteFeedEl.children.length && cacheImageItems.length < Math.min(FLOW_FIRST_DISPLAY_COUNT, targetCount)) {
+          ensureCacheStock();
+          updateFlowLoader(`Waiting for list images ${cacheImageItems.length}/${targetCount}`, 74);
+          return;
+        }
+        const missingCount = targetCount - infiniteFeedEl.querySelectorAll(".infinite-feed-item").length;
+        if (missingCount > 0) {
+          await appendFlowItems(missingCount, { exact: true });
+          return;
+        }
+      }
+
+      async function startWallMode() {
+        fillAspectQueue();
+        if (rec1El.dataset.ready === "true") {
+          return;
+        }
+        await placeRec1();
+        let anchorRec = rec1El;
+        for (let index = 1; index < INITIAL_PLACE_COUNT; index += 1) {
+          await createNextRec(anchorRec, { count: 1, avoidExisting: true, small: true });
+          const recs = wallEl.querySelectorAll(".bounding-box");
+          anchorRec = recs[recs.length - 1] || anchorRec;
+        }
       }
 
 
@@ -327,13 +2272,23 @@
         });
       }
 
-      function queueAspectPrefetch() {
-        const imageItem = pickRandomImage();
-        if (!imageItem) {
+      function takeNextWallImageItem() {
+        const freshItem = takeNextFreshFlowItem();
+        if (freshItem) {
+          return freshItem;
+        }
+        const historyPool = flowHistoryItems.filter((item) => item?.imageUrl);
+        const picked = getRandomFrom(historyPool);
+        return picked ? cloneFlowItem(picked, { repeatKind: "wall-repeat" }) : null;
+      }
+
+      function loadWallImagePayload(imageItem) {
+        if (!imageItem?.imageUrl) {
           return Promise.resolve(null);
         }
+        queuedAspectUrls.add(imageItem.imageUrl);
         const imageUrl = buildImageProxyUrl(imageItem.imageUrl);
-        const promise = new Promise((resolve) => {
+        return new Promise((resolve) => {
           const img = new Image();
           img.onload = () =>
             resolve({
@@ -346,9 +2301,20 @@
             });
           img.onerror = () => resolve(null);
           img.src = imageUrl;
-        }).catch(() => null);
+        }).finally(() => {
+          queuedAspectUrls.delete(imageItem.imageUrl);
+        });
+      }
+
+      function queueAspectPrefetch() {
+        const imageItem = takeNextWallImageItem();
+        const promise = loadWallImagePayload(imageItem).catch(() => null);
 
         promise.then((result) => {
+          const queueIndex = aspectQueue.indexOf(promise);
+          if (queueIndex >= 0) {
+            aspectQueue.splice(queueIndex, 1);
+          }
           if (result) {
             readyAspects.push(result);
           }
@@ -357,7 +2323,10 @@
       }
 
       function fillAspectQueue() {
-        while (aspectQueue.length < PREFETCH_COUNT) {
+        if (displayMode !== "wall") {
+          return;
+        }
+        while (aspectQueue.length + readyAspects.length < MAX_ASPECT_PREFETCH) {
           aspectQueue.push(queueAspectPrefetch());
         }
       }
@@ -368,6 +2337,9 @@
           return readyAspects.shift();
         }
         const nextPromise = aspectQueue.shift();
+        if (!nextPromise) {
+          return null;
+        }
         const result = await nextPromise;
         fillAspectQueue();
         return result;
@@ -389,8 +2361,10 @@
       function pickSizeOffset() {
         const options = [
           { label: "L", offset: 140 },
-          { label: "M", offset: 200 },
           { label: "S", offset: 260 },
+          { label: "S", offset: 300 },
+          { label: "XS", offset: 360 },
+          { label: "XS", offset: 420 },
         ];
         return options[Math.floor(Math.random() * options.length)];
       }
@@ -399,8 +2373,8 @@
         return {
           x: wallPadding,
           y: wallPadding,
-          width: wallRect.width - wallPadding * 2,
-          height: wallRect.height - wallPadding * 2,
+          width: Math.max(WALL_MIN_REC_SIZE_PX, wallRect.width - wallPadding * 2),
+          height: Math.max(WALL_MIN_REC_SIZE_PX, wallRect.height - wallPadding * 2),
         };
       }
 
@@ -460,7 +2434,72 @@
         );
       }
 
-      async function placeRecInFrame(frameRect, recEl, recLabel, sizeOffset) {
+      function findWallPlacement(frameRect, recWidth, recHeight, avoidRects) {
+        const recHalfWidth = recWidth / 2;
+        const recHalfHeight = recHeight / 2;
+        const centerMinX = frameRect.x + recHalfWidth;
+        const centerMaxX = frameRect.x + frameRect.width - recHalfWidth;
+        const centerMinY = frameRect.y + recHalfHeight;
+        const centerMaxY = frameRect.y + frameRect.height - recHalfHeight;
+        if (centerMaxX < centerMinX || centerMaxY < centerMinY) {
+          return null;
+        }
+
+        const collisionGap = 18;
+        const buildCandidate = (centerX, centerY) => {
+          const left = clamp(centerX - recHalfWidth, frameRect.x, frameRect.x + frameRect.width - recWidth);
+          const top = clamp(centerY - recHalfHeight, frameRect.y, frameRect.y + frameRect.height - recHeight);
+          const collisionRect = {
+            x: left - collisionGap,
+            y: top - collisionGap,
+            width: recWidth + collisionGap * 2,
+            height: recHeight + collisionGap * 2,
+          };
+          return { left, top, collisionRect };
+        };
+        const canUse = (candidate) => !avoidRects.some((rect) => rectanglesOverlap(candidate.collisionRect, rect));
+
+        if (avoidRects.length === 0) {
+          const centerX = frameRect.x + frameRect.width / 2;
+          const centerY = frameRect.y + frameRect.height / 2;
+          const candidate = buildCandidate(centerX, centerY);
+          return { left: candidate.left, top: candidate.top };
+        }
+
+        for (let attempt = 0; attempt < WALL_SLOT_RANDOM_ATTEMPTS; attempt += 1) {
+          const centerX = randomBetween(centerMinX, centerMaxX);
+          const centerY = randomBetween(centerMinY, centerMaxY);
+          const candidate = buildCandidate(centerX, centerY);
+          if (canUse(candidate)) {
+            return { left: candidate.left, top: candidate.top };
+          }
+        }
+
+        const xSteps = Math.max(2, WALL_SLOT_GRID_STEPS);
+        const ySteps = Math.max(2, WALL_SLOT_GRID_STEPS);
+        const candidates = [];
+        for (let yIndex = 0; yIndex < ySteps; yIndex += 1) {
+          for (let xIndex = 0; xIndex < xSteps; xIndex += 1) {
+            const xRatio = xSteps === 1 ? 0.5 : xIndex / (xSteps - 1);
+            const yRatio = ySteps === 1 ? 0.5 : yIndex / (ySteps - 1);
+            candidates.push(buildCandidate(
+              centerMinX + (centerMaxX - centerMinX) * xRatio,
+              centerMinY + (centerMaxY - centerMinY) * yRatio,
+            ));
+          }
+        }
+        candidates.sort((a, b) => {
+          const frameCenterX = frameRect.x + frameRect.width / 2;
+          const frameCenterY = frameRect.y + frameRect.height / 2;
+          const aDistance = Math.hypot(a.left + recHalfWidth - frameCenterX, a.top + recHalfHeight - frameCenterY);
+          const bDistance = Math.hypot(b.left + recHalfWidth - frameCenterX, b.top + recHalfHeight - frameCenterY);
+          return aDistance - bDistance;
+        });
+        const candidate = candidates.find(canUse);
+        return candidate ? { left: candidate.left, top: candidate.top } : null;
+      }
+
+      async function placeRecInFrame(frameRect, recEl, recLabel, sizeOffset, avoidRects = []) {
         const aspectPayload = await getNextAspect();
         if (!aspectPayload) {
           recEl.dataset.ready = "false";
@@ -469,47 +2508,35 @@
         const { width, height, imageUrl, sourceUrl, sourcePageUrl, img } = aspectPayload;
         const recAspect = width / height;
         const squareSize = Math.max(
-          80,
+          WALL_MIN_REC_SIZE_PX,
           Math.min(frameRect.width, frameRect.height) - sizeOffset,
         );
         const recSize = buildRecSizeFromSquare(squareSize, recAspect);
 
         const recWidth = Math.min(recSize.width, frameRect.width);
         const recHeight = Math.min(recSize.height, frameRect.height);
-        const recHalfWidth = recWidth / 2;
-        const recHalfHeight = recHeight / 2;
-
-        const centerMinX = frameRect.x + recHalfWidth;
-        const centerMaxX = frameRect.x + frameRect.width - recHalfWidth;
-        const centerMinY = frameRect.y + recHalfHeight;
-        const centerMaxY = frameRect.y + frameRect.height - recHalfHeight;
-
-        const centerX =
-          centerMaxX <= centerMinX
-            ? frameRect.x + frameRect.width / 2
-            : randomBetween(centerMinX, centerMaxX);
-        const centerY =
-          centerMaxY <= centerMinY
-            ? frameRect.y + frameRect.height / 2
-            : randomBetween(centerMinY, centerMaxY);
-
-        const recLeft = centerX - recHalfWidth;
-        const recTop = centerY - recHalfHeight;
+        const placement = findWallPlacement(frameRect, recWidth, recHeight, avoidRects);
+        if (!placement) {
+          recEl.dataset.ready = "false";
+          return;
+        }
 
         recEl.style.width = `${recWidth}px`;
         recEl.style.height = `${recHeight}px`;
-        recEl.style.left = `${recLeft}px`;
-        recEl.style.top = `${recTop}px`;
+        recEl.style.left = `${placement.left}px`;
+        recEl.style.top = `${placement.top}px`;
         recEl.style.backgroundImage = `url("${(img && img.src) || imageUrl}")`;
         recEl.style.backgroundSize = "cover";
         recEl.style.backgroundPosition = "center";
         recEl.style.border = "none";
         recEl.style.boxShadow = "none";
+        recEl.style.outline = "none";
         recEl.style.display = "grid";
         recEl.textContent = "";
         recEl.dataset.imageUrl = sourceUrl || "";
         recEl.dataset.pageUrl = sourcePageUrl || "";
         recEl.dataset.ready = "true";
+        refreshLocalStats();
       }
 
       async function placeRec1() {
@@ -526,9 +2553,10 @@
         recCount = 1;
 
         await placeRecInFrame(innerFrame, rec1El, "1", 24);
+        refreshLocalStats();
       }
 
-      async function createNextRec(fromRecEl) {
+      async function createNextRec(fromRecEl, options = {}) {
         if (isPlacing) {
           return;
         }
@@ -537,37 +2565,80 @@
           const wallRect = wallEl.getBoundingClientRect();
           const wallPadding = 32;
           const innerFrame = getInnerWallFrame(wallRect, wallPadding);
-          const fromRecRect = getRecRect(fromRecEl);
-          const largeVoid = getLargestVoid(innerFrame, fromRecRect);
+          const existingRecs = Array.from(wallEl.querySelectorAll('.bounding-box[data-ready="true"]'))
+            .filter((rec) => rec !== fromRecEl)
+            .filter((rec) => rec.dataset.wallExiting !== "true");
+          const protectedRects = fromRecEl?.dataset.ready === "true" ? [getRecRect(fromRecEl)] : [];
+          const newRects = [];
+          const pendingEntrances = [];
+          const fallbackRemoveRecs = [];
+          const targetCount = Math.max(1, Number(options.count || 1));
 
-          const nextIndex = recCount + 1;
-          const nextRecEl = document.createElement("div");
-          nextRecEl.className = "bounding-box";
-          wallEl.appendChild(nextRecEl);
+          for (let createIndex = 0; createIndex < targetCount; createIndex += 1) {
+            const nextIndex = recCount + 1;
+            const nextRecEl = document.createElement("div");
+            nextRecEl.className = "bounding-box";
+            nextRecEl.dataset.wallReveal = "true";
+            wallEl.appendChild(nextRecEl);
 
-          const picked = pickSizeOffset();
-          await placeRecInFrame(largeVoid, nextRecEl, String(nextIndex), picked.offset);
-          recCount = nextIndex;
-
-          if (removeUnderMode) {
-            const newRect = getRecRect(nextRecEl);
-            const existing = Array.from(wallEl.querySelectorAll(".bounding-box")).filter(
-              (rec) => rec !== nextRecEl,
-            );
-            existing.forEach((rec) => {
-              const recRect = getRecRect(rec);
-              if (rectanglesOverlap(newRect, recRect)) {
-                rec.remove();
+            const picked = pickSizeOffset();
+            const sizeOffsets = options.small
+              ? [420, 500, 560, 620, 360, 300]
+              : Array.from(new Set([picked.offset, 300, 360, 420, 500, 560, 620]));
+            for (const sizeOffset of sizeOffsets) {
+              const avoidRects = options.removeOverlaps
+                ? protectedRects.concat(newRects)
+                : options.avoidExisting
+                ? protectedRects.concat(existingRecs.map((rec) => getRecRect(rec)), newRects)
+                : existingRecs.map((rec) => getRecRect(rec)).concat(newRects);
+              await placeRecInFrame(innerFrame, nextRecEl, String(nextIndex), sizeOffset, avoidRects);
+              if (nextRecEl.dataset.ready === "true") {
+                break;
               }
+            }
+            if (nextRecEl.dataset.ready !== "true" && options.removeOverlaps && fromRecEl?.dataset.ready === "true") {
+              const fallbackOffsets = [620, 560, 500, 420, 360, 300];
+              for (const sizeOffset of fallbackOffsets) {
+                await placeRecInFrame(innerFrame, nextRecEl, String(nextIndex), sizeOffset, newRects);
+                if (nextRecEl.dataset.ready === "true") {
+                  fallbackRemoveRecs.push(fromRecEl);
+                  break;
+                }
+              }
+            }
+            if (nextRecEl.dataset.ready !== "true") {
+              nextRecEl.remove();
+              continue;
+            }
+            nextRecEl.style.opacity = "0";
+            recCount = nextIndex;
+            newRects.push(getRecRect(nextRecEl));
+            pendingEntrances.push(nextRecEl);
+
+            nextRecEl.addEventListener("click", () => {
+              handleRecClick(nextRecEl);
+            });
+            nextRecEl.addEventListener("contextmenu", (event) => {
+              openRecPageOnRightClick(event, nextRecEl);
             });
           }
 
-          nextRecEl.addEventListener("click", () => {
-            handleRecClick(nextRecEl);
+          if (options.removeOverlaps && newRects.length > 0) {
+            const overlappedRecs = existingRecs.filter((rec) => {
+              const rect = getRecRect(rec);
+              return newRects.some((newRect) => rectanglesOverlap(newRect, rect));
+            });
+            const recsToRemove = Array.from(new Set(overlappedRecs.concat(fallbackRemoveRecs)));
+            await Promise.all(recsToRemove.map((rec) => removeWallRec(rec)));
+          }
+
+          pendingEntrances.forEach((rec) => {
+            rec.style.opacity = "";
+            animateWallRecEnter(rec);
           });
-          nextRecEl.addEventListener("contextmenu", (event) => {
-            openRecPageOnRightClick(event, nextRecEl);
-          });
+
+          refreshLocalStats();
+          updateAutoMode();
         } finally {
           isPlacing = false;
         }
@@ -603,12 +2674,68 @@
         }));
         refreshCacheUi();
         aspectQueue.length = 0;
+        queuedAspectUrls.clear();
         fillAspectQueue();
       }
 
+      function animateWallRecExit(recEl) {
+        return new Promise((resolve) => {
+          if (!recEl || recEl.dataset.ready !== "true") {
+            resolve();
+            return;
+          }
+          recEl.dataset.wallExiting = "true";
+          const animation = recEl.animate(
+            [
+              { opacity: 1, transform: "scale(1)", filter: "blur(0)" },
+              { opacity: 0, transform: "scale(1.08)", filter: "blur(10px)" },
+            ],
+            {
+              duration: 900,
+              easing: "cubic-bezier(0.4, 0, 0.2, 1)",
+              fill: "forwards",
+            },
+          );
+          animation.addEventListener("finish", () => {
+            resolve();
+          }, { once: true });
+        });
+      }
+
+      function animateWallRecEnter(recEl) {
+        if (!recEl || recEl.dataset.ready !== "true") {
+          return;
+        }
+        recEl.animate(
+          [
+            { opacity: 0, transform: "scale(0.82)" },
+            { opacity: 1, transform: "scale(1.035)", offset: 0.72 },
+            { opacity: 1, transform: "scale(1)" },
+          ],
+          {
+            duration: 960,
+            easing: "cubic-bezier(0.18, 0.86, 0.24, 1)",
+          },
+        );
+      }
+
+      async function removeWallRec(recEl) {
+        await animateWallRecExit(recEl);
+        if (recEl !== rec1El) {
+          recEl.remove();
+        } else {
+          recEl.dataset.ready = "false";
+          recEl.dataset.wallExiting = "false";
+          recEl.style.display = "none";
+        }
+      }
+
       async function handleRecClick(recEl) {
-        consumeClickedImage(recEl);
-        await createNextRec(recEl);
+        if (displayMode !== "wall") {
+          return;
+        }
+        const nextCount = 1 + (Math.random() < 0.35 ? 0 : 1);
+        await createNextRec(recEl, { count: nextCount, removeOverlaps: true, small: nextCount === 2 });
         ensureCacheStock();
       }
 
@@ -628,66 +2755,158 @@
         openRecPageOnRightClick(event, rec1El);
       });
 
-      rerollButton.addEventListener("click", (event) => {
+      settingsDotEl.addEventListener("click", () => {
+        const shouldOpen = document.body.dataset.settingsOpen !== "true";
+        settingsDotEl.setAttribute("aria-expanded", String(shouldOpen));
+        settingsPanelEl.setAttribute("aria-hidden", String(!shouldOpen));
+        document.body.dataset.settingsOpen = shouldOpen ? "true" : "false";
+      });
+
+      settingsDotEl.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") {
+          return;
+        }
         event.preventDefault();
-        placeRec1();
+        settingsDotEl.click();
+      });
+
+      conceptToggleInput.addEventListener("change", () => {
+        conceptPanelEl.hidden = !conceptToggleInput.checked;
+        conceptToggleInput.setAttribute("aria-expanded", String(conceptToggleInput.checked));
+        updateSettingsStates();
+      });
+
+      backgroundFilterInput.addEventListener("change", () => {
+        saveLocalSettings();
+        updateSettingsStates();
+        backgroundAnalysisCache.clear();
+        if (backgroundFilterInput.checked) {
+          cacheImageItems = cacheImageItems.filter((item) => !blockedImageUrls.has(item.imageUrl));
+          ensureCacheStock();
+        }
+        refreshCacheUi();
+      });
+
+      layoutDebugInput.addEventListener("change", () => {
+        saveLocalSettings();
+        updateSettingsStates();
+        updateLayoutDebugMode();
+        if (isFeedDisplayMode()) {
+          relayoutFlowItems();
+        }
+      });
+
+      autoScrollInput.addEventListener("change", () => {
+        saveLocalSettings();
+        updateSettingsStates();
+        updateAutoScrollMode();
+      });
+
+      displayModeInput.addEventListener("change", () => {
+        const currentIndex = DISPLAY_MODES.indexOf(displayMode);
+        const nextMode = DISPLAY_MODES[(currentIndex + 1) % DISPLAY_MODES.length] || "flow";
+        displayModeInput.checked = false;
+        setDisplayMode(nextMode);
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape" || document.body.dataset.settingsOpen !== "true") {
+          return;
+        }
+        settingsDotEl.setAttribute("aria-expanded", "false");
+        settingsPanelEl.setAttribute("aria-hidden", "true");
+        document.body.dataset.settingsOpen = "false";
+      });
+
+      window.addEventListener("scroll", () => {
+        maintainInfiniteFeed();
+      }, { passive: true });
+
+      window.addEventListener("resize", () => {
+        if (isFeedDisplayMode()) {
+          relayoutFlowItems();
+        }
+        maintainInfiniteFeed();
       });
 
       async function loadImages() {
-        const maxPages = maxPagesInput.value;
+        const targetCount = getCacheTarget();
+        let loadErrorMessage = "";
 
         try {
           isLoadingImages = true;
+          setBusy(true);
+          saveLocalSettings();
+          statusEl.dataset.state = "";
           aspectQueue.length = 0;
           readyAspects.length = 0;
+          queuedAspectUrls.clear();
           cacheImageItems = [];
+          resetFlowFeed();
           rec1El.dataset.ready = "false";
           lastUrlCount = 0;
           lastImageCount = 0;
           blockedImageUrls.clear();
           blockedPageUrls.clear();
           statusEl.textContent = "Loading images...";
+          updateFlowLoader("Preparing initial load...", 3);
           crawlStateEl.textContent = "Crawl state: picking random categories...";
           advancedResultEl.textContent = "Result: loading...";
           cachedPageUrlsEl.textContent = "Cached Page URLs: loading...";
           cachedImageUrlsEl.textContent = "Cached Image URLs: loading...";
-          const query = buildFetchQuery(maxPages);
-          const data = await fetchJson(`/api/monotaro-random-products?${query.toString()}`);
-          lastUrlCount = Number(data.url_count || 0);
-          lastImageCount = Number(data.image_count || 0);
-          const initialItems = extractUniqueImageItemsFromData(data);
-          mergeIntoCache(initialItems, PREFETCH_COUNT);
-          await refillCacheToTarget(PREFETCH_COUNT);
-          fillAspectQueue();
+          await loadFirstFilteredImages(FLOW_FIRST_DISPLAY_COUNT);
           refreshCacheUi();
-          await placeRec1();
-          await createNextRec(rec1El);
-          const rec2 = wallEl.querySelectorAll(".bounding-box")[1];
-          if (rec2) {
-            await createNextRec(rec2);
+          if (displayMode === "flow") {
+            updateFlowLoader("Composing first layout...", 82);
+            await startFlowMode();
+          } else if (displayMode === "list") {
+            updateFlowLoader("Composing list...", 82);
+            await startListMode();
+            ensureCacheStock();
+          } else {
+            fillAspectQueue();
+            updateFlowLoader("Placing first image...", 82);
+            await placeRec1();
+            let anchorRec = rec1El;
+            for (let index = 1; index < INITIAL_PLACE_COUNT; index += 1) {
+              updateFlowLoader(`Placing images ${index + 1}/${INITIAL_PLACE_COUNT}`, 82 + Math.round((index / INITIAL_PLACE_COUNT) * 12));
+              await createNextRec(anchorRec, { count: 1, avoidExisting: true, small: true });
+              const recs = wallEl.querySelectorAll(".bounding-box");
+              anchorRec = recs[recs.length - 1] || anchorRec;
+            }
+            updateAutoScrollMode();
           }
+          updateFlowLoader("Initial load ready", 100);
+          ensureCacheStock();
         } catch (error) {
           statusEl.textContent = error.message || "Failed to load images.";
+          loadErrorMessage = statusEl.textContent;
+          statusEl.dataset.state = "error";
+          updateFlowLoader(statusEl.textContent);
           crawlStateEl.textContent = "Crawl state: idle";
           advancedResultEl.textContent = `Result: ${statusEl.textContent}`;
           cachedPageUrlsEl.textContent = "Cached Page URLs: (none)";
           cachedImageUrlsEl.textContent = "Cached Image URLs: (none)";
         } finally {
           isLoadingImages = false;
+          setBusy(false);
+          refreshLocalStats();
+          updateFlowLoader(loadErrorMessage || undefined);
         }
       }
 
-      form.addEventListener("submit", (event) => {
-        event.preventDefault();
-        loadImages();
-      });
-
-      window.addEventListener("load", () => {
+      window.addEventListener("load", async () => {
+        loadLocalSettings();
+        setDisplayMode(displayMode, false);
+        updateSettingsStates();
+        updateLayoutDebugMode();
         if (categoryDataInput) {
           categoryDataInput.title = "Copied from monotaro-category-scraper/data/all-categories.deep.categories.csv";
         }
+        refreshLocalStats();
+        updateFlowLoader("Loading images...");
+        await loadImages();
         startCacheMonitor();
-        loadImages();
       });
     </script>
   </body>
