@@ -79,8 +79,7 @@ body[data-page-key="web"] .infinite-feed {
 
 body[data-page-key="web"][data-display-mode="flow"] #wall-surface,
 body[data-page-key="web"][data-display-mode="list"] #wall-surface,
-body[data-page-key="web"][data-display-mode="wall"] .infinite-feed,
-body[data-page-key="web"][data-display-mode="wall"] .flow-loader {
+body[data-page-key="web"][data-display-mode="wall"] .infinite-feed {
   display: none;
 }
 
@@ -116,6 +115,7 @@ body[data-page-key="a"] .app-shell,
 body[data-page-key="web"] .app-shell {
   width: 100%;
   max-width: none;
+  padding-top: 64px;
   padding-left: 0;
   padding-right: 0;
 }
@@ -445,13 +445,14 @@ body[data-display-mode="list"] .infinite-feed {
   width: min(92vw, var(--list-frame-width, 92vw));
   min-height: 0 !important;
   display: grid;
-  grid-template-columns: repeat(var(--list-grid-columns, 6), minmax(0, 1fr));
+  grid-template-columns: repeat(var(--list-grid-columns, 6), var(--list-cell-size, 180px));
   grid-template-rows: repeat(var(--list-grid-rows, 1), var(--list-cell-size, 180px));
   grid-auto-rows: var(--list-cell-size, 180px);
   grid-auto-flow: row;
   align-items: center;
   justify-items: center;
-  gap: clamp(12px, 1.6vw, 26px);
+  align-content: start;
+  gap: var(--list-gap, clamp(12px, 1.6vw, 26px));
   padding: clamp(14px, 2vw, 28px);
   overflow: visible;
 }
@@ -464,34 +465,62 @@ body[data-display-mode="list"] .infinite-feed-item {
   min-height: 0;
   display: grid;
   place-items: center;
-  overflow: visible;
+  overflow: hidden;
 }
 
 body[data-display-mode="list"] .infinite-feed-image {
-  width: auto;
-  height: auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
   max-width: 100%;
   max-height: 100%;
+  object-position: center;
   object-fit: contain;
+}
+
+body[data-display-mode="list"] .infinite-feed-image[data-list-fit="height"] {
+  width: 100%;
+  height: 100%;
+}
+
+body[data-display-mode="list"] .infinite-feed-image[data-list-fit="width"] {
+  width: 100%;
+  height: 100%;
 }
 
 body[data-display-mode="list"] .infinite-feed-group {
   width: 100%;
   height: 100%;
   gap: 18px;
+  overflow: hidden;
 }
 
 body[data-display-mode="list"] .flow-group-cell {
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
 }
 
 body[data-display-mode="list"] .flow-group-cell .infinite-feed-image {
-  width: auto;
-  height: auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
   max-width: 100%;
   max-height: 100%;
+  object-position: center;
   object-fit: contain;
+}
+
+body[data-display-mode="list"] .flow-group-cell .infinite-feed-image[data-list-fit="height"] {
+  width: 100%;
+  height: 100%;
+}
+
+body[data-display-mode="list"] .flow-group-cell .infinite-feed-image[data-list-fit="width"] {
+  width: 100%;
+  height: 100%;
 }
 
 .flow-section-guide {
@@ -543,6 +572,10 @@ body[data-layout-debug="true"] .infinite-feed-item {
   outline-offset: 0;
   overflow: visible;
   z-index: 20;
+}
+
+body[data-layout-debug="true"][data-display-mode="list"] .infinite-feed-item {
+  overflow: hidden;
 }
 
 body[data-layout-debug="true"] .infinite-feed-item::before {
@@ -691,33 +724,49 @@ body[data-layout-debug="true"] .infinite-feed-group {
 }
 
 .flow-loader {
-  width: min(86vw, 900px);
-  margin: 48px auto 32px;
-  min-height: 42px;
+  position: fixed;
+  top: 16px;
+  left: 48px;
+  z-index: 48;
+  width: auto;
+  max-width: min(520px, calc(100vw - 64px));
+  height: 20px;
+  min-height: 20px;
+  margin: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 8px;
+  flex-wrap: nowrap;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 20px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-4px);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.flow-loader[data-active="true"],
+.flow-loader[data-progress-active="true"] {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+body[data-settings-open="true"] .flow-loader {
+  opacity: 0;
+  transform: translateX(-4px);
 }
 
 .flow-loader-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.35;
-}
-
-.flow-loader[data-active="true"] .flow-loader-dot {
-  animation: flowPulse 900ms ease-in-out infinite;
+  display: none;
 }
 
 .flow-loader-progress {
   display: none;
-  width: min(260px, 42vw);
+  width: min(150px, 28vw);
   height: 1px;
   overflow: hidden;
   background: rgba(0, 0, 0, 0.08);
@@ -827,6 +876,20 @@ body[data-layout-debug="true"] .infinite-feed-group {
 
   body[data-settings-open="true"] .settings-panel {
     transform: translateY(0);
+  }
+
+  .flow-loader {
+    top: 14px;
+    left: 56px;
+    height: 30px;
+    min-height: 30px;
+    max-width: calc(100vw - 72px);
+    font-size: 11px;
+    line-height: 30px;
+  }
+
+  .flow-loader-progress {
+    width: min(92px, 22vw);
   }
 
   .settings-option {

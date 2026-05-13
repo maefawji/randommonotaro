@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Webpage Image Viewer</title>
-    <link rel="stylesheet" href="./style.css" />
+    <link rel="stylesheet" href="./style.css?v=viewer-ui-20260513-8" />
     <script>
       window.WEBPAGE_VIEWER_CONFIG = {
         apiBase: "",
@@ -13,6 +13,13 @@
   </head>
   <body data-page-mode="b" data-page-key="web" data-display-mode="flow">
     <div id="settings-dot" class="settings-dot" role="button" tabindex="0" aria-label="Open settings" aria-expanded="false" aria-controls="settings-panel"></div>
+    <div id="flow-loader" class="flow-loader" aria-live="polite">
+      <span class="flow-loader-dot"></span>
+      <span id="flow-loader-text">Loading images...</span>
+      <span id="flow-loader-progress" class="flow-loader-progress" aria-hidden="true">
+        <span class="flow-loader-progress-bar"></span>
+      </span>
+    </div>
     <aside id="settings-panel" class="settings-panel" aria-hidden="true">
       <div class="settings-controls">
         <label class="settings-option settings-menu-control">
@@ -25,10 +32,10 @@
           <span class="settings-label">Display Mode</span>
           <span id="display-mode-state" class="settings-state">Scroll</span>
         </label>
-        <label class="settings-option settings-menu-control">
+        <label id="auto-scroll-control" class="settings-option settings-menu-control">
           <input id="auto-scroll-input" type="checkbox" checked />
           <span class="settings-label">Auto</span>
-          <span class="settings-state" data-setting-state-for="auto-scroll-input">ON</span>
+          <span class="settings-state" data-setting-state-for="auto-scroll-input">FAST</span>
         </label>
         <label class="settings-option settings-menu-control">
           <input id="background-filter-input" type="checkbox" checked />
@@ -95,14 +102,6 @@
           <span>Blocked 0</span>
         </div>
       </section>
-
-      <div id="flow-loader" class="flow-loader" aria-live="polite">
-        <span class="flow-loader-dot"></span>
-        <span id="flow-loader-text">Loading images...</span>
-        <span id="flow-loader-progress" class="flow-loader-progress" aria-hidden="true">
-          <span class="flow-loader-progress-bar"></span>
-        </span>
-      </div>
     </main>
 
     <script>
@@ -128,6 +127,7 @@
       const conceptPanelEl = document.getElementById("concept-panel");
       const backgroundFilterInput = document.getElementById("background-filter-input");
       const layoutDebugInput = document.getElementById("layout-debug-input");
+      const autoScrollControl = document.getElementById("auto-scroll-control");
       const autoScrollInput = document.getElementById("auto-scroll-input");
       const displayModeInput = document.getElementById("display-mode-input");
       const displayModeState = document.getElementById("display-mode-state");
@@ -142,11 +142,18 @@
       let isLoadingImages = false;
       let isFlowAppending = false;
       let displayMode = "flow";
+      let autoMode = "fast";
       const DISPLAY_MODES = ["flow", "wall", "list"];
       const DISPLAY_MODE_LABELS = {
         flow: "Scroll",
         wall: "Wall",
         list: "List",
+      };
+      const AUTO_MODES = ["fast", "slow", "off"];
+      const AUTO_MODE_LABELS = {
+        fast: "FAST",
+        slow: "SLOW",
+        off: "OFF",
       };
       let flowNextY = 0;
       let autoScrollFrameId = null;
@@ -170,8 +177,14 @@
       const FLOW_LOADING_BUFFER_PX = 3200;
       const FLOW_EMERGENCY_AHEAD_PX = 120;
       const FLOW_EMERGENCY_REVEAL_GAP_PX = 180;
-      const AUTO_SCROLL_PX_PER_SECOND = 64;
-      const AUTO_WALL_CLICK_INTERVAL_MS = 2200;
+      const AUTO_SCROLL_SPEEDS = {
+        fast: 88,
+        slow: 34,
+      };
+      const AUTO_WALL_CLICK_INTERVALS_MS = {
+        fast: 2200,
+        slow: 5200,
+      };
       const FLOW_SECTION_DEFAULT_ITEM_COUNT = 9;
       const FLOW_REPEAT_MEMORY_LIMIT = 42;
       const FLOW_REPEAT_MAX_AGE = 72;
@@ -380,7 +393,10 @@
             layoutDebugInput.checked = settings.showLayoutDebug;
           }
           if (typeof settings.autoScroll === "boolean") {
-            autoScrollInput.checked = settings.autoScroll;
+            autoMode = settings.autoScroll ? "fast" : "off";
+          }
+          if (settings.autoMode && AUTO_MODES.includes(settings.autoMode)) {
+            autoMode = settings.autoMode;
           }
           if (settings.displayMode && DISPLAY_MODES.includes(settings.displayMode)) {
             displayMode = settings.displayMode;
@@ -398,7 +414,8 @@
           delayMs: delayMsInput.value,
           excludeBackgroundImages: backgroundFilterInput.checked,
           showLayoutDebug: layoutDebugInput.checked,
-          autoScroll: autoScrollInput.checked,
+          autoMode,
+          autoScroll: autoMode !== "off",
           displayMode,
         };
         window.localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(settings));
@@ -413,14 +430,20 @@
           const inputEl = document.getElementById(stateEl.dataset.settingStateFor);
           stateEl.textContent = inputEl?.checked ? "ON" : "OFF";
         });
+        autoScrollInput.checked = autoMode !== "off";
+        const autoStateEl = document.querySelector('[data-setting-state-for="auto-scroll-input"]');
+        if (autoStateEl) {
+          autoStateEl.textContent = AUTO_MODE_LABELS[autoMode] || "OFF";
+        }
         displayModeState.textContent = DISPLAY_MODE_LABELS[displayMode] || "Scroll";
       }
 
       function updateAutoMode() {
-        document.body.dataset.autoScroll = autoScrollInput.checked ? "true" : "false";
+        autoScrollInput.checked = autoMode !== "off";
+        document.body.dataset.autoScroll = autoMode;
         stopAutoScroll();
         stopAutoWallClick();
-        if (!autoScrollInput.checked) {
+        if (autoMode === "off") {
           return;
         }
         if (displayMode === "wall") {
@@ -444,7 +467,7 @@
         if (autoWallTimerId !== null) {
           return;
         }
-        autoWallTimerId = window.setInterval(runAutoWallClick, AUTO_WALL_CLICK_INTERVAL_MS);
+        autoWallTimerId = window.setInterval(runAutoWallClick, getAutoWallClickInterval());
       }
 
       function stopAutoWallClick() {
@@ -458,7 +481,7 @@
       async function runAutoWallClick() {
         if (
           isAutoWallClicking ||
-          !autoScrollInput.checked ||
+          autoMode === "off" ||
           displayMode !== "wall" ||
           isPlacing
         ) {
@@ -507,7 +530,7 @@
       }
 
       function stepAutoScroll(timestamp) {
-        if (!autoScrollInput.checked || displayMode !== "flow") {
+        if (autoMode === "off" || displayMode !== "flow") {
           stopAutoScroll();
           return;
         }
@@ -516,7 +539,7 @@
         if (displayMode === "flow") {
           maintainInfiniteFeed();
         }
-        const rawDistance = AUTO_SCROLL_PX_PER_SECOND * deltaSeconds + autoScrollRemainder;
+        const rawDistance = getAutoScrollSpeed() * deltaSeconds + autoScrollRemainder;
         const scrollDistance = Math.floor(rawDistance * 100) / 100;
         autoScrollRemainder = rawDistance - scrollDistance;
         window.scrollBy({ top: scrollDistance, left: 0, behavior: "auto" });
@@ -529,6 +552,19 @@
           return 96;
         }
         return Math.max(1, Math.min(240, Math.floor(value)));
+      }
+
+      function getAutoScrollSpeed() {
+        return AUTO_SCROLL_SPEEDS[autoMode] || 0;
+      }
+
+      function getAutoWallClickInterval() {
+        return AUTO_WALL_CLICK_INTERVALS_MS[autoMode] || AUTO_WALL_CLICK_INTERVALS_MS.slow;
+      }
+
+      function cycleAutoMode() {
+        const currentIndex = AUTO_MODES.indexOf(autoMode);
+        autoMode = AUTO_MODES[(currentIndex + 1) % AUTO_MODES.length] || "off";
       }
 
       function ensureCacheStock() {
@@ -1336,6 +1372,7 @@
             img.loading = "eager";
             img.decoding = "async";
             img.src = buildImageProxyUrl(groupItem.imageUrl);
+            observeListImageFit(img);
 
             cell.append(img);
             link.append(cell);
@@ -1347,6 +1384,7 @@
           img.loading = "eager";
           img.decoding = "async";
           img.src = buildImageProxyUrl(item.imageUrl);
+          observeListImageFit(img);
 
           link.append(img);
         }
@@ -1612,6 +1650,39 @@
         if (flowPlacedItems.length > 80) {
           flowPlacedItems.shift();
         }
+        updateListImageFits(element);
+        window.requestAnimationFrame(() => updateListImageFits(element));
+      }
+
+      function observeListImageFit(img) {
+        img.addEventListener("load", () => updateListImageFit(img), { once: false });
+        if (img.complete) {
+          window.requestAnimationFrame(() => updateListImageFit(img));
+        }
+      }
+
+      function updateListImageFits(root = infiniteFeedEl) {
+        if (displayMode !== "list") {
+          return;
+        }
+        root.querySelectorAll(".infinite-feed-image").forEach((img) => updateListImageFit(img));
+      }
+
+      function updateListImageFit(img) {
+        if (displayMode !== "list" || !img) {
+          return;
+        }
+        const cell = img.closest(".flow-group-cell, .infinite-feed-item");
+        if (!cell) {
+          return;
+        }
+        const cellRect = cell.getBoundingClientRect();
+        if (!cellRect.width || !cellRect.height) {
+          return;
+        }
+        img.style.width = `${Math.round(cellRect.width)}px`;
+        img.style.height = `${Math.round(cellRect.height)}px`;
+        img.dataset.listFit = "cell";
       }
 
       function applyMobileFlowPlacement(element, item, index) {
@@ -2249,13 +2320,16 @@
 
       function updateListGridDimensions(itemCount = infiniteFeedEl.querySelectorAll(".infinite-feed-item").length) {
         const width = Math.max(1, window.innerWidth || 960);
-        const frameWidth = Math.max(320, Math.round(width * 0.92));
+        const targetFrameWidth = Math.max(320, Math.round(width * 0.92));
         const columns = getListColumnCount(width);
         const rows = Math.max(1, Math.ceil(Math.max(1, itemCount) / columns));
-        const cellSize = Math.max(96, Math.min(220, Math.floor((frameWidth / columns) * 0.72)));
+        const gapSize = Math.round(clamp(width * 0.016, 12, 26));
+        const cellSize = Math.max(96, Math.min(240, Math.floor((targetFrameWidth - gapSize * (columns - 1)) / columns)));
+        const frameWidth = columns * cellSize + gapSize * (columns - 1);
 
         infiniteFeedEl.style.setProperty("--list-frame-width", `${frameWidth}px`);
         infiniteFeedEl.style.setProperty("--list-cell-size", `${cellSize}px`);
+        infiniteFeedEl.style.setProperty("--list-gap", `${gapSize}px`);
         infiniteFeedEl.style.setProperty("--list-grid-columns", String(columns));
         infiniteFeedEl.style.setProperty("--list-grid-rows", String(rows));
         return { columns, rows };
@@ -2566,6 +2640,16 @@
         return options[Math.floor(Math.random() * options.length)];
       }
 
+      function getWallSizeOffsets(picked, options = {}) {
+        if (isMobileViewport()) {
+          return [24, 80, 140, 200, 260, 300, 360, 420];
+        }
+        if (options.small) {
+          return [420, 500, 560, 620, 360, 300];
+        }
+        return Array.from(new Set([picked.offset, 300, 360, 420, 500, 560, 620]));
+      }
+
       function getInnerWallFrame(wallRect, wallPadding) {
         return {
           x: wallPadding,
@@ -2768,7 +2852,6 @@
           const protectedRects = fromRecEl?.dataset.ready === "true" ? [getRecRect(fromRecEl)] : [];
           const newRects = [];
           const pendingEntrances = [];
-          const fallbackRemoveRecs = [];
           const targetCount = Math.max(1, Number(options.count || 1));
 
           for (let createIndex = 0; createIndex < targetCount; createIndex += 1) {
@@ -2779,9 +2862,7 @@
             wallEl.appendChild(nextRecEl);
 
             const picked = pickSizeOffset();
-            const sizeOffsets = options.small
-              ? [420, 500, 560, 620, 360, 300]
-              : Array.from(new Set([picked.offset, 300, 360, 420, 500, 560, 620]));
+            const sizeOffsets = getWallSizeOffsets(picked, options);
             for (const sizeOffset of sizeOffsets) {
               const avoidRects = options.removeOverlaps
                 ? protectedRects.concat(newRects)
@@ -2791,16 +2872,6 @@
               await placeRecInFrame(innerFrame, nextRecEl, String(nextIndex), sizeOffset, avoidRects);
               if (nextRecEl.dataset.ready === "true") {
                 break;
-              }
-            }
-            if (nextRecEl.dataset.ready !== "true" && options.removeOverlaps && fromRecEl?.dataset.ready === "true") {
-              const fallbackOffsets = [620, 560, 500, 420, 360, 300];
-              for (const sizeOffset of fallbackOffsets) {
-                await placeRecInFrame(innerFrame, nextRecEl, String(nextIndex), sizeOffset, newRects);
-                if (nextRecEl.dataset.ready === "true") {
-                  fallbackRemoveRecs.push(fromRecEl);
-                  break;
-                }
               }
             }
             if (nextRecEl.dataset.ready !== "true") {
@@ -2825,8 +2896,7 @@
               const rect = getRecRect(rec);
               return newRects.some((newRect) => rectanglesOverlap(newRect, rect));
             });
-            const recsToRemove = Array.from(new Set(overlappedRecs.concat(fallbackRemoveRecs)));
-            await Promise.all(recsToRemove.map((rec) => removeWallRec(rec)));
+            await Promise.all(overlappedRecs.map((rec) => removeWallRec(rec)));
           }
 
           pendingEntrances.forEach((rec) => {
@@ -2934,7 +3004,7 @@
         if (displayMode !== "wall") {
           return;
         }
-        const nextCount = 1 + (Math.random() < 0.35 ? 0 : 1);
+        const nextCount = isMobileViewport() ? 1 : 1 + (Math.random() < 0.35 ? 0 : 1);
         await createNextRec(recEl, { count: nextCount, removeOverlaps: true, small: nextCount === 2 });
         ensureCacheStock();
       }
@@ -2997,7 +3067,9 @@
         }
       });
 
-      autoScrollInput.addEventListener("change", () => {
+      autoScrollControl.addEventListener("click", (event) => {
+        event.preventDefault();
+        cycleAutoMode();
         saveLocalSettings();
         updateSettingsStates();
         updateAutoScrollMode();
