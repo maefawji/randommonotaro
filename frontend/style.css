@@ -1,4 +1,7 @@
 :root {
+  --settings-dot-size: 20px;
+  --settings-dot-top: 16px;
+  --flow-loader-height: 20px;
   --bg: #f6efe4;
   --panel: rgba(255, 252, 246, 0.94);
   --line: #ddcfbd;
@@ -297,16 +300,16 @@ body[data-display-mode="wall"] .bounding-box[data-ready="true"] {
 
 .settings-dot {
   position: fixed;
-  top: 16px;
+  top: var(--settings-dot-top);
   left: 16px;
   z-index: 50;
   display: block;
-  width: 20px !important;
-  min-width: 20px !important;
-  max-width: 20px !important;
-  height: 20px !important;
-  min-height: 20px !important;
-  max-height: 20px !important;
+  width: var(--settings-dot-size) !important;
+  min-width: var(--settings-dot-size) !important;
+  max-width: var(--settings-dot-size) !important;
+  height: var(--settings-dot-size) !important;
+  min-height: var(--settings-dot-size) !important;
+  max-height: var(--settings-dot-size) !important;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -725,13 +728,13 @@ body[data-layout-debug="true"] .infinite-feed-group {
 
 .flow-loader {
   position: fixed;
-  top: 16px;
+  top: calc(var(--settings-dot-top) + ((var(--settings-dot-size) - var(--flow-loader-height)) / 2));
   left: 48px;
   z-index: 48;
   width: auto;
   max-width: min(520px, calc(100vw - 64px));
-  height: 20px;
-  min-height: 20px;
+  height: var(--flow-loader-height);
+  min-height: var(--flow-loader-height);
   margin: 0;
   display: flex;
   align-items: center;
@@ -740,13 +743,19 @@ body[data-layout-debug="true"] .infinite-feed-group {
   flex-wrap: nowrap;
   color: var(--muted);
   font-size: 11px;
-  line-height: 20px;
+  line-height: var(--flow-loader-height);
   opacity: 0;
   pointer-events: none;
   transform: translateX(-4px);
   transition:
     opacity 160ms ease,
     transform 160ms ease;
+}
+
+#flow-loader-text {
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
 }
 
 .flow-loader[data-active="true"],
@@ -847,16 +856,22 @@ body[data-settings-open="true"] .flow-loader {
 }
 
 @media (max-width: 760px) {
+  :root {
+    --settings-dot-size: 30px;
+    --settings-dot-top: 14px;
+    --flow-loader-height: 30px;
+  }
+
   #settings-dot.settings-dot,
   body[data-page-key="web"] .settings-dot {
-    top: 14px !important;
+    top: var(--settings-dot-top) !important;
     left: 14px !important;
-    width: 30px !important;
-    min-width: 30px !important;
-    max-width: 30px !important;
-    height: 30px !important;
-    min-height: 30px !important;
-    max-height: 30px !important;
+    width: var(--settings-dot-size) !important;
+    min-width: var(--settings-dot-size) !important;
+    max-width: var(--settings-dot-size) !important;
+    height: var(--settings-dot-size) !important;
+    min-height: var(--settings-dot-size) !important;
+    max-height: var(--settings-dot-size) !important;
   }
 
   .settings-panel {
@@ -879,13 +894,13 @@ body[data-settings-open="true"] .flow-loader {
   }
 
   .flow-loader {
-    top: 14px;
+    top: calc(var(--settings-dot-top) + ((var(--settings-dot-size) - var(--flow-loader-height)) / 2));
     left: 56px;
-    height: 30px;
-    min-height: 30px;
+    height: var(--flow-loader-height);
+    min-height: var(--flow-loader-height);
     max-width: calc(100vw - 72px);
     font-size: 11px;
-    line-height: 30px;
+    line-height: var(--flow-loader-height);
   }
 
   .flow-loader-progress {
